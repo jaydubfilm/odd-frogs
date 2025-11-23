@@ -14,6 +14,8 @@ import { FrogSystem } from './systems/FrogSystem';
 import { FoodSystem } from './systems/FoodSystem';
 import { CollisionSystem } from './systems/CollisionSystem';
 import { WaveSystem } from './systems/WaveSystem';
+import { AudioManager } from './systems/AudioManager';
+
 
 export class GameEngine {
   private canvas: HTMLCanvasElement;
@@ -28,6 +30,7 @@ export class GameEngine {
   
   // Systems
   private renderer: Renderer;
+  private audioManager: AudioManager;
   private frogSystem: FrogSystem;
   private foodSystem: FoodSystem;
   private collisionSystem: CollisionSystem;
@@ -61,7 +64,9 @@ export class GameEngine {
     
     // Initialize systems
     this.renderer = new Renderer(this.ctx);
-    this.frogSystem = new FrogSystem();
+    this.audioManager = new AudioManager();
+    this.audioManager.loadSound('slurp', '/sounds/shortlick.m4a');
+    this.frogSystem = new FrogSystem(this.audioManager);
     this.foodSystem = new FoodSystem();
     this.collisionSystem = new CollisionSystem();
     this.waveSystem = new WaveSystem(this.foodSystem);
