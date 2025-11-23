@@ -129,7 +129,18 @@ export class GameEngine {
       this.animationFrameId = requestAnimationFrame(this.gameLoop);
     }
   }
-  
+
+  restart(): void {
+    console.log('Restart method called');
+    if (this.currentLevel) {
+      console.log('Reloading level:', this.currentLevel.id);
+      this.loadLevel(this.currentLevel);
+      this.start();
+    } else {
+      console.log('No current level to restart!');
+    }
+  }
+
   stop(): void {
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
@@ -234,9 +245,23 @@ export class GameEngine {
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    
+
+    // Check for restart button click if game is over
+    if (this.gameState.isGameOver) {
+      const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
+      const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
+      const buttonWidth = 150;
+      const buttonHeight = 40;
+
+      if (x >= buttonX && x <= buttonX + buttonWidth &&
+        y >= buttonY && y <= buttonY + buttonHeight) {
+        this.restart();
+        return;
+      }
+    }
+
     const gridPos = this.pixelToGrid(x, y);
-    
+
     if (gridPos && this.gameState.selectedFrogType) {
       this.placeFrog(gridPos, this.gameState.selectedFrogType);
     }

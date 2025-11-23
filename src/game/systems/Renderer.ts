@@ -3,7 +3,7 @@ import { COLORS, GAME_CONFIG } from '@data/constants';
 
 export class Renderer {
   private hasLoggedStreams = false;
-
+  private gameOverStartTime: number = 0;
   constructor(private ctx: CanvasRenderingContext2D) { }
 
   renderBackground(ctx: CanvasRenderingContext2D): void {
@@ -237,6 +237,12 @@ export class Renderer {
     this.ctx.fillText(`Score: ${gameState.score}`, 310, 25);
 
     if (gameState.isGameOver) {
+
+      if (this.gameOverStartTime === 0) {
+        this.gameOverStartTime = performance.now();
+      }
+      const fadeProgress = Math.min((performance.now() - this.gameOverStartTime) / 1000, 1);
+
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
 
@@ -252,6 +258,35 @@ export class Renderer {
         GAME_CONFIG.canvasWidth / 2,
         GAME_CONFIG.canvasHeight / 2 + 50
       );
+
+      // Restart button
+      const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
+      const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
+      const buttonWidth = 150;
+      const buttonHeight = 40;
+
+
+      // Only show button after fade completes
+      if (fadeProgress >= 0.5) {
+        const buttonAlpha = (fadeProgress - 0.5) * 2; // Fade in from 0.5s to 1s
+
+        // Button background
+        this.ctx.fillStyle = '#4CAF50';
+        this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+        // Button border
+        this.ctx.strokeStyle = '#45a049';
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+        // Button text
+        this.ctx.fillStyle = 'white';
+        this.ctx.font = 'bold 20px Arial';
+        this.ctx.fillText('RESTART', GAME_CONFIG.canvasWidth / 2, buttonY + 26);
+      }
+    } else {
+      // Reset timer when game is playing
+      this.gameOverStartTime = 0;
     }
   }
 }
