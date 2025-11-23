@@ -1,5 +1,6 @@
-import { FrogType } from '../../types/game';
+﻿import { FrogType } from '../../types/game';
 import { FROG_STATS } from '@data/constants';
+import { FrogPreview } from './FrogPreview';  // ← ADD THIS IMPORT
 
 interface FrogSelectorProps {
   selectedFrog: FrogType | null;
@@ -13,7 +14,7 @@ export const FrogSelector: React.FC<FrogSelectorProps> = ({
   playerMoney,
 }) => {
   const frogTypes = Object.values(FrogType);
-  
+
   return (
     <div className="bg-white/90 rounded-lg p-4 shadow-lg">
       <h2 className="text-2xl font-bold text-gray-800 mb-4">Select Frog</h2>
@@ -22,7 +23,7 @@ export const FrogSelector: React.FC<FrogSelectorProps> = ({
           const stats = FROG_STATS[frogType];
           const canAfford = playerMoney >= stats.cost;
           const isSelected = selectedFrog === frogType;
-          
+
           return (
             <button
               key={frogType}
@@ -36,10 +37,10 @@ export const FrogSelector: React.FC<FrogSelectorProps> = ({
               `}
             >
               <div className="flex items-center gap-3">
-                <div
-                  className="w-12 h-12 rounded-full border-2 border-gray-400"
-                  style={{ backgroundColor: stats.color }}
-                />
+                {/* ← REPLACE the colored div with FrogPreview */}
+                <div className="w-12 h-12 flex items-center justify-center border-2 border-gray-300 rounded-lg bg-blue-50">
+                  <FrogPreview frogType={frogType} size={48} />
+                </div>
                 <div className="text-left">
                   <div className="font-bold text-gray-800">{frogType}</div>
                   <div className="text-xs text-gray-600">

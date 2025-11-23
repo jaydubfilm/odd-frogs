@@ -331,7 +331,7 @@ export class GameEngine {
     const currentTime = performance.now() / 1000;
     if (this.waveSystem.canCallNextWave(currentTime, this.foods)) {
       const buttonX = GAME_CONFIG.canvasWidth - 160;
-      const buttonY = 50;
+      const buttonY = 10;
       const buttonWidth = 150;
       const buttonHeight = 35;
 
