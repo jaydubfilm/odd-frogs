@@ -135,6 +135,10 @@ export class Renderer {
 
     const size = GAME_CONFIG.cellSize * 0.5 * 0.9;  // ← Multiply by 0.9 for 10% smaller
 
+    if (frog.tongue && frog.tongue.active) {
+      this.renderTongue(pos, frog.tongue);
+    }
+
     this.ctx.fillStyle = frog.stats.color;
     this.ctx.beginPath();
     this.ctx.arc(pos.x, pos.y, size / 2, 0, Math.PI * 2);
@@ -157,6 +161,38 @@ export class Renderer {
       this.ctx.font = 'bold 12px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.fillText(`Lv${frog.level}`, pos.x, pos.y + size / 2 + 12);
+    }
+  }
+
+  private renderTongue(
+    frogPos: { x: number; y: number },
+    tongue: { targetPosition: { x: number; y: number }; progress: number }
+  ): void {
+    const currentX = frogPos.x + (tongue.targetPosition.x - frogPos.x) * tongue.progress;
+    const currentY = frogPos.y + (tongue.targetPosition.y - frogPos.y) * tongue.progress;
+
+    // Draw tongue line
+    this.ctx.strokeStyle = '#FF69B4';
+    this.ctx.lineWidth = 4;  // ← Slightly thicker
+    this.ctx.lineCap = 'round';
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(frogPos.x, frogPos.y);
+    this.ctx.lineTo(currentX, currentY);
+    this.ctx.stroke();
+
+    // Draw tongue tip (only if extended past a certain threshold)
+    if (tongue.progress > 0.1) {  // ← Only draw tip when tongue is visible
+      this.ctx.fillStyle = '#FF1493';
+      this.ctx.beginPath();
+      this.ctx.arc(currentX, currentY, 5, 0, Math.PI * 2);  // ← Slightly larger
+      this.ctx.fill();
+
+      // Add a white highlight for clarity
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      this.ctx.beginPath();
+      this.ctx.arc(currentX - 1, currentY - 1, 2, 0, Math.PI * 2);
+      this.ctx.fill();
     }
   }
 
@@ -223,7 +259,7 @@ export class Renderer {
     this.ctx.strokeRect(x, y, barWidth, barHeight);
   }
 
-  renderUI(gameState: GameState): void {
+  renderUI(gameState: GameState, waveSystem: any, totalWaves: number): void {
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, 40);
 
@@ -233,8 +269,87 @@ export class Renderer {
 
     this.ctx.fillText(`Lives: ${gameState.lives}`, 10, 25);
     this.ctx.fillText(`Money: $${gameState.money}`, 100, 25);
-    this.ctx.fillText(`Wave: ${gameState.wave}`, 220, 25);
+    this.ctx.fillText(`Wave: ${gameState.wave}/${totalWaves}`, 220, 25); 
     this.ctx.fillText(`Score: ${gameState.score}`, 310, 25);
+
+    // Show countdown timer
+    const currentTime = performance.now() / 1000;
+    const timeRemaining = waveSystem.getTimeUntilNextWave(currentTime);
+    const isLastWave = gameState.wave >= totalWaves;  
+
+    if (timeRemaining > 0 && !gameState.isVictory && !isLastWave) { 
+      const minutes = Math.floor(timeRemaining / 60);
+      const seconds = Math.floor(timeRemaining % 60);
+      const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+      this.ctx.fillStyle = '#FFD700';
+      this.ctx.textAlign = 'right';
+      this.ctx.fillText(`Next wave in ${timeString}`, GAME_CONFIG.canvasWidth - 10, 25);
+    }
+
+    // Show "Call Next Wave" button (only if not last wave and not victory)
+    if (waveSystem.canCallNextWave(currentTime) && !gameState.isVictory && !isLastWave) {  // ← ADD isLastWave check
+      const buttonX = GAME_CONFIG.canvasWidth - 160;
+      const buttonY = 50;
+      const buttonWidth = 150;
+      const buttonHeight = 35;
+
+      // Calculate bonus
+      const bonus = Math.floor(timeRemaining * 10);
+
+      // Button background
+      this.ctx.fillStyle = '#FFA500';
+      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+      // Button border
+      this.ctx.strokeStyle = '#FF8C00';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+      // Button text
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 14px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('CALL NEXT WAVE', buttonX + buttonWidth / 2, buttonY + 14);
+      this.ctx.font = '11px Arial';
+      this.ctx.fillStyle = '#FFD700';
+      this.ctx.fillText(`(+$${bonus} bonus)`, buttonX + buttonWidth / 2, buttonY + 28);
+    }
+
+    if (gameState.isVictory) {
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
+
+      this.ctx.fillStyle = '#FFD700';
+      this.ctx.font = 'bold 48px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('VICTORY!', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 - 30);
+
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = '24px Arial';
+      this.ctx.fillText(
+        `Final Score: ${gameState.score}`,
+        GAME_CONFIG.canvasWidth / 2,
+        GAME_CONFIG.canvasHeight / 2 + 20
+      );
+
+      // Restart button
+      const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
+      const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
+      const buttonWidth = 150;
+      const buttonHeight = 40;
+
+      this.ctx.fillStyle = '#4CAF50';
+      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+      this.ctx.strokeStyle = '#45a049';
+      this.ctx.lineWidth = 3;
+      this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 20px Arial';
+      this.ctx.fillText('RESTART', GAME_CONFIG.canvasWidth / 2, buttonY + 26);
+    }
 
     if (gameState.isGameOver) {
 
@@ -271,7 +386,7 @@ export class Renderer {
         const buttonAlpha = (fadeProgress - 0.5) * 2; // Fade in from 0.5s to 1s
 
         // Button background
-        this.ctx.fillStyle = '#4CAF50';
+        this.ctx.fillStyle = `rgba(76, 175, 80, ${buttonAlpha})`;
         this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
 
         // Button border

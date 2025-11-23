@@ -21,13 +21,14 @@ export const LEVEL_1: LevelData = {
   streams: [
     {
       id: 'stream-1',
-      channels: [2, 2, 1, 2, 2], 
+      channels: [2, 2, 1, 2, 2],
       offset: 0,
     },
   ],
   waves: [
     {
       waveNumber: 1,
+      duration: 30,
       foods: [
         {
           type: FoodType.APPLE,
@@ -39,6 +40,7 @@ export const LEVEL_1: LevelData = {
     },
     {
       waveNumber: 2,
+      duration: 45,
       foods: [
         {
           type: FoodType.APPLE,
@@ -56,6 +58,7 @@ export const LEVEL_1: LevelData = {
     },
     {
       waveNumber: 3,
+      duration: 30,
       foods: [
         {
           type: FoodType.BURGER,

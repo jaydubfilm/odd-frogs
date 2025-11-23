@@ -3,7 +3,7 @@ import { FrogData, FoodData } from '../../types/game';
 export class CollisionSystem {
   checkCollisions(
     frogs: Map<string, FrogData>,
-    foods: Map<string, FoodData>
+    _foods: Map<string, FoodData>
   ): void {
     // This system is primarily used for additional collision detection
     // The main attack logic is handled in FrogSystem

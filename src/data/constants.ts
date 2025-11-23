@@ -57,19 +57,19 @@ export const FOOD_BASE_STATS: Record<FoodType, FoodStats> = {
   [FoodType.CAKE]: {
     health: 30,
     maxHealth: 30,
-    speed: 50,
+    speed: 30,
     reward: 15,
   },
   [FoodType.APPLE]: {
     health: 10,
     maxHealth: 10,
-    speed: 80,
+    speed: 40,
     reward: 5,
   },
   [FoodType.BEANS]: {
     health: 50,
     maxHealth: 50,
-    speed: 40,
+    speed: 35,
     reward: 25,
   },
   [FoodType.BURGER]: {
@@ -81,7 +81,7 @@ export const FOOD_BASE_STATS: Record<FoodType, FoodStats> = {
   [FoodType.PIZZA]: {
     health: 40,
     maxHealth: 40,
-    speed: 45,
+    speed: 25,
     reward: 20,
   },
 };

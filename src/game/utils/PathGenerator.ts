@@ -1,9 +1,4 @@
 interface Point { x: number; y: number; }
-
-const LANE_GAP = 12;          // Distance between streams
-const CORNER_RADIUS = 20;     // How much to "cut" the corner
-const SMOOTHING_PASSES = 5;   // High smoothing for "liquid" curves
-
 export interface SmoothPath {
   points: Point[];
   length: number;
@@ -15,7 +10,6 @@ export interface SmoothPath {
 export class PathGenerator {
   private static readonly CORNER_RADIUS = 20;
   private static readonly SMOOTHING_PASSES = 7;
-  private static readonly LANE_GAP = 12;
 
   /**
    * Generate a smooth path from line segments

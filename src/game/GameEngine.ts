@@ -1,4 +1,4 @@
-import { 
+﻿import { 
   GameState, 
   LevelData, 
   GridCell, 
@@ -51,6 +51,7 @@ export class GameEngine {
       score: 0,
       isPaused: false,
       isGameOver: false,
+      isVictory: false, 
       selectedFrogType: null,
       selectedGridCell: null,
     };
@@ -81,6 +82,7 @@ export class GameEngine {
     this.gameState.lives = GAME_CONFIG.startingLives;
     this.gameState.score = 0;
     this.gameState.isGameOver = false;
+    this.gameState.isVictory = false;
     
     // Initialize grid from level layout
     this.initializeGrid(level);
@@ -91,6 +93,12 @@ export class GameEngine {
     
     // Reset wave system
     this.waveSystem.reset();
+
+    if (level.waves.length > 0) {
+      const currentTime = performance.now() / 1000;
+      this.gameState.wave = 1;
+      this.waveSystem.startWave(level.waves[0], currentTime);
+    }
   }
   
   private initializeGrid(level: LevelData): void {
@@ -171,50 +179,65 @@ export class GameEngine {
   
   private update(deltaTime: number): void {
     if (!this.currentLevel) return;
-    
+
     const currentTime = performance.now() / 1000;
-    
+
     // Update wave system
     this.waveSystem.update(currentTime, this.foods, this.currentLevel.streams);
-    
-    // Start next wave if current is complete
-    if (this.waveSystem.isWaveComplete(this.foods) && this.gameState.wave < this.currentLevel.waves.length) {
-      const nextWave = this.currentLevel.waves[this.gameState.wave];
-      if (nextWave) {
-        this.gameState.wave++;
-        this.waveSystem.startWave(nextWave, currentTime);
+
+    // Check if current wave is complete and start next wave
+    if (this.waveSystem.isWaveComplete(currentTime)) {
+      if (this.gameState.wave < this.currentLevel.waves.length) {
+        // Start next wave
+        const nextWave = this.currentLevel.waves[this.gameState.wave];
+        if (nextWave) {
+          this.gameState.wave++;
+          this.waveSystem.startWave(nextWave, currentTime);
+        }
       }
     }
-    
+
+    // Check for victory: final wave + all enemies spawned + all enemies dead
+    if (this.gameState.wave >= this.currentLevel.waves.length &&
+      this.waveSystem.hasSpawnedAllEnemies() &&  // ← CHANGED: Check spawn queue instead of isActive
+      this.foods.size === 0 &&
+      !this.gameState.isVictory) {
+      this.gameState.isVictory = true;
+      this.gameState.isPaused = true;
+      console.log('VICTORY! All enemies defeated!');
+    }
+
     // Update food positions along paths
     this.foodSystem.updateFoods(this.foods, this.currentLevel.streams, deltaTime);
-    
+
     // Update frog attacks
     this.frogSystem.updateFrogs(this.frogs, this.foods, this.grid, deltaTime);
-    
+
     // Check for collisions and damage
     this.collisionSystem.checkCollisions(this.frogs, this.foods);
-    
+
     // Remove destroyed foods and award money
     this.removeDestroyedFoods();
-    
+
     // Check for foods that reached the end
     this.checkFoodsReachedEnd();
   }
   
   private render(): void {
     if (!this.currentLevel) return;
-    
-    // Clear canvas
+
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    // Render game elements
+
     this.renderer.renderBackground(this.ctx);
     this.renderer.renderStreams(this.currentLevel.streams);
     this.renderer.renderGrid(this.grid);
     this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
     this.renderer.renderFoods(Array.from(this.foods.values()));
-    this.renderer.renderUI(this.gameState);
+    this.renderer.renderUI(
+      this.gameState,
+      this.waveSystem,
+      this.currentLevel.waves.length  
+    ); 
   }
   
   private removeDestroyedFoods(): void {
@@ -246,8 +269,8 @@ export class GameEngine {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
-    // Check for restart button click if game is over
-    if (this.gameState.isGameOver) {
+    // Check for restart button click if game is over OR victory
+    if (this.gameState.isGameOver || this.gameState.isVictory) {
       const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
       const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
       const buttonWidth = 150;
@@ -256,6 +279,21 @@ export class GameEngine {
       if (x >= buttonX && x <= buttonX + buttonWidth &&
         y >= buttonY && y <= buttonY + buttonHeight) {
         this.restart();
+        return;
+      }
+    }
+
+    // Check for "Call Next Wave" button click
+    const currentTime = performance.now() / 1000;
+    if (this.waveSystem.canCallNextWave(currentTime)) {
+      const buttonX = GAME_CONFIG.canvasWidth - 160;
+      const buttonY = 50;
+      const buttonWidth = 150;
+      const buttonHeight = 35;
+
+      if (x >= buttonX && x <= buttonX + buttonWidth &&
+        y >= buttonY && y <= buttonY + buttonHeight) {
+        this.callNextWave();
         return;
       }
     }
@@ -301,13 +339,27 @@ export class GameEngine {
     
     return true;
   }
-  
+
+  callNextWave(): void {
+    const currentTime = performance.now() / 1000;
+    const bonus = this.waveSystem.callNextWaveEarly(currentTime);
+
+    if (bonus > 0) {
+      this.gameState.money += bonus;
+      console.log(`Early wave bonus: $${bonus}`);
+    }
+  }
+
   selectFrogType(frogType: FrogType | null): void {
     this.gameState.selectedFrogType = frogType;
   }
   
   getGameState(): GameState {
     return { ...this.gameState };
+  }
+
+  getWaveSystem(): WaveSystem {
+    return this.waveSystem;
   }
   
   destroy(): void {

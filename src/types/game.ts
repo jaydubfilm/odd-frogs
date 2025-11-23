@@ -42,7 +42,16 @@ export enum StreamDirection {
   DOWN = 'DOWN',
 }
 
-
+export interface WaveData {
+  waveNumber: number;
+  duration: number;  // ← ADD THIS: seconds until next wave auto-starts
+  foods: {
+    type: FoodType;
+    count: number;
+    spawnInterval: number;
+    streamId: string;
+  }[];
+}
 
 export interface FrogStats {
   damage: number;
@@ -61,6 +70,12 @@ export interface FrogData {
   stats: FrogStats;
   lastAttackTime: number;
   targetFood: string | null;
+  tongue?: {                  
+    active: boolean;
+    targetPosition: Position;
+    progress: number;           // 0 to 1 (extend) then 1 to 0 (retract)
+    startTime: number;
+  };
 }
 
 export interface FoodStats {
@@ -115,6 +130,7 @@ export interface GameState {
   score: number;
   isPaused: boolean;
   isGameOver: boolean;
+  isVictory: boolean; 
   selectedFrogType: FrogType | null;
   selectedGridCell: GridPosition | null;
 }
