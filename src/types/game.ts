@@ -1,4 +1,7 @@
+﻿
 // Core game types and interfaces
+
+import { SmoothPath } from '../game/utils/PathGenerator';
 
 export interface Position {
   x: number;
@@ -68,14 +71,19 @@ export interface FoodStats {
 }
 
 export interface FoodData {
-  id: string;
-  type: FoodType;
-  streamId: string; // ADD THIS
-  position: Position;
-  pathIndex: number;
-  pathProgress: number;
-  stats: FoodStats;
-  currentHealth: number;
+  id: string;                    // ← ADD if missing
+  type: FoodType;                // ← ADD if missing
+  streamId: string;              // ← ADD if missing
+  position: Position;            // ← ADD if missing
+  distanceTraveled: number;      // ← ADD (replaces pathIndex/pathProgress)
+  stats: {                       // ← ADD if missing
+    health: number;
+    maxHealth: number;
+    speed: number;
+    reward: number;
+  };
+  currentHealth: number;         // ← ADD if missing
+  reachedEnd?: boolean;          // ← ADD (optional flag)
 }
 
 export interface PathSegment {
@@ -155,4 +163,5 @@ export interface StreamPath {
   channelSections: ChannelSection[];
   laneSections: LaneSection[];
   offset: number;
+  smoothPath?: SmoothPath;
 }

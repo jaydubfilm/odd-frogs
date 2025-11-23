@@ -1,5 +1,6 @@
-﻿import { CellType, LevelData, StreamPath, StreamDirection, PathSegment } from '../../types/game';
+﻿import { CellType, LevelData, StreamPath, PathSegment, ChannelSection, LaneSection, PathElement } from '../../types/game';
 import { GAME_CONFIG } from '../../data/constants';
+import { PathGenerator } from './PathGenerator';
 
 export function generateRandomLevel(): LevelData {
   const gridLayout: CellType[][] = [];
@@ -63,14 +64,30 @@ function generateNonOverlappingStreams(numStreams: number): StreamPath[] {
     }
   }
 
+  const LANE_GAP = 12;
+  const centerIndex = (numStreams - 1) / 2;
+
+
   return streamChannels.map((channels, index) => {
     const { channelSections, laneSections } = channelsToPath(channels);
+
+    // Calculate offset for this stream
+    const relIndex = index - centerIndex;
+    const offsetDistance = relIndex * LANE_GAP;
+
+    // Generate smooth path
+    const elements = channelsToSegments(channels);
+    const segments = elements.filter((el): el is PathSegment => 'start' in el);
+    const smoothPath = PathGenerator.generateSmoothPath(segments, offsetDistance);
+ 
+
     return {
       id: `stream-${index + 1}`,
       channels,
       channelSections,
       laneSections,
       offset: (index - (numStreams - 1) / 2) * 3,
+      smoothPath,  // ← ADD THIS LINE
     };
   });
 }
@@ -122,6 +139,7 @@ export function channelsToSegments(channels: number[]): PathElement[] {
   elements.push({
     start: { x: entryX, y: 0 },
     end: { x: entryX, y: currentY - cornerRadius },
+    isHorizontal: false,  // ← ADD THIS
   });
 
   // Process each row transition
@@ -146,6 +164,7 @@ export function channelsToSegments(channels: number[]): PathElement[] {
       elements.push({
         start: { x: currentX + (goingRight ? cornerRadius : -cornerRadius), y: currentY },
         end: { x: nextX - (goingRight ? cornerRadius : -cornerRadius), y: currentY },
+        isHorizontal: true,  // ← ADD THIS
       });
 
       // Corner: horizontal → vertical
@@ -158,12 +177,14 @@ export function channelsToSegments(channels: number[]): PathElement[] {
       elements.push({
         start: { x: nextX, y: currentY + cornerRadius },
         end: { x: nextX, y: nextY - cornerRadius },
+        isHorizontal: false,  // ← ADD THIS
       });
     } else {
       // Straight vertical segment
       elements.push({
         start: { x: currentX, y: currentY - cornerRadius },
         end: { x: currentX, y: nextY - cornerRadius },
+        isHorizontal: false,  // ← ADD THIS
       });
     }
   }
@@ -174,6 +195,7 @@ export function channelsToSegments(channels: number[]): PathElement[] {
   elements.push({
     start: { x: exitX, y: exitY - cornerRadius },
     end: { x: exitX, y: GAME_CONFIG.canvasHeight },
+    isHorizontal: false,  // ← ADD THIS
   });
 
   // DEBUG: Log all elements
