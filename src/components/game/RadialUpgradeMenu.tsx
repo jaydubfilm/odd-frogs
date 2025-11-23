@@ -7,6 +7,7 @@ interface RadialUpgradeMenuProps {
   availableUpgrades: UpgradeNode[];
   playerMoney: number;
   onPurchase: (nodeId: string) => void;
+  onSell: () => void;
   onClose: () => void;
 }
 
@@ -16,9 +17,13 @@ export function RadialUpgradeMenu({
   availableUpgrades,
   playerMoney,
   onPurchase,
+  onSell,
   onClose,
 }: RadialUpgradeMenuProps) {
   const spacing = 110; // Horizontal spacing between upgrade buttons
+
+  // Calculate sell value: half of (original cost + total upgrades)
+  const sellValue = Math.floor((frog.stats.cost + frog.upgradeState.totalSpent) / 2);
 
   return (
     <div
@@ -48,6 +53,15 @@ export function RadialUpgradeMenu({
             <div>SPD: {frog.stats.attackSpeed.toFixed(1)}</div>
             <div>RNG: {frog.stats.range.toFixed(1)}</div>
           </div>
+
+          {/* Sell button */}
+          <button
+            onClick={onSell}
+            className="mt-2 w-full bg-orange-500 hover:bg-orange-600 text-white 
+                       font-bold py-1 px-3 rounded text-xs transition-colors"
+          >
+            Sell for ${sellValue}
+          </button>
         </div>
       </div>
 

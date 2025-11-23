@@ -427,6 +427,26 @@ export class GameEngine {
     return true;
   }
 
+  sellFrog(frogId: string): number {
+    const frog = this.frogs.get(frogId);
+    if (!frog) return 0;
+
+    // Calculate sell value: half of (original cost + upgrades)
+    const sellValue = Math.floor((frog.stats.cost + frog.upgradeState.totalSpent) / 2);
+
+    // Remove frog from grid
+    const cell = this.grid[frog.gridPosition.row][frog.gridPosition.col];
+    cell.frog = null;
+
+    // Remove from frogs map
+    this.frogs.delete(frogId);
+
+    // Add money
+    this.gameState.money += sellValue;
+
+    return sellValue;
+  }
+
   callNextWave(): void {
     const currentTime = performance.now() / 1000;
     const bonus = this.waveSystem.callNextWaveEarly(currentTime, this.foods);  // ← ADD this.foods

@@ -191,6 +191,24 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   };
 
+  const handleSellFrog = () => {
+    if (!hoveredFrog || !gameEngineRef.current) return;
+
+    const sellValue = gameEngineRef.current.sellFrog(hoveredFrog.id);
+
+    if (sellValue > 0) {
+      const currentState = gameEngineRef.current.getGameState();
+
+      if (onGameStateChange) {
+        onGameStateChange(currentState);
+      }
+
+      // Close menu after selling
+      setHoveredFrog(null);
+      setUpgradeMenuPosition(null);
+    }
+  };
+
   const handleCloseMenu = () => {
     setHoveredFrog(null);
     setUpgradeMenuPosition(null);
@@ -219,6 +237,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           availableUpgrades={upgradeSystemRef.current.getAvailableUpgrades(hoveredFrog)}
           playerMoney={gameEngineRef.current?.getGameState().money || 0}
           onPurchase={handlePurchaseUpgrade}
+          onSell={handleSellFrog}
           onClose={handleCloseMenu}
         />
       )}

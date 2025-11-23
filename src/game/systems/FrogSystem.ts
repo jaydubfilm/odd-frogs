@@ -37,26 +37,30 @@ export class FrogSystem {
   ): FoodData | null {
     const frogPos = this.getGridCellPosition(frog.gridPosition);
     if (!frogPos) return null;
-    
-    let closestFood: FoodData | null = null;
-    let closestDistance = Infinity;
-    
+
+    let priorityFood: FoodData | null = null;
+    let maxDistanceTraveled = -1;
+
     foods.forEach(food => {
       // Check if line of sight is blocked by rocks
       if (this.isLineOfSightBlocked(frogPos, food.position, grid)) {
         return;
       }
-      
+
       const distance = this.getDistance(frogPos, food.position);
       const rangeInPixels = frog.stats.range * GAME_CONFIG.cellSize;
-      
-      if (distance <= rangeInPixels && distance < closestDistance) {
-        closestFood = food;
-        closestDistance = distance;
+
+      // Only consider food within range
+      if (distance <= rangeInPixels) {
+        // Prioritize food that has traveled the farthest (closest to end)
+        if (food.distanceTraveled > maxDistanceTraveled) {
+          priorityFood = food;
+          maxDistanceTraveled = food.distanceTraveled;
+        }
       }
     });
-    
-    return closestFood;
+
+    return priorityFood;
   }
   
   private isLineOfSightBlocked(

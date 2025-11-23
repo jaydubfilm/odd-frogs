@@ -1,3 +1,4 @@
+﻿import React, { useEffect, useRef } from 'react';
 import { LevelProgress } from '../../types/game';
 
 interface LevelMapProps {
@@ -6,110 +7,218 @@ interface LevelMapProps {
 }
 
 export function LevelMap({ progress, onSelectLevel }: LevelMapProps) {
-  // River path: snake pattern across the screen
-  const getNodePosition = (index: number): { x: number; y: number } => {
-    const nodesPerRow = 5;
-    const row = Math.floor(index / nodesPerRow);
-    const col = index % nodesPerRow;
+  // --- CONFIGURATION ---
+  // We use a fixed logical width for calculations. 
+  // The CSS will scale this to fit the phone screen automatically.
+  const GRID_WIDTH = 500;
+  const LEVEL_SPACING = 140;
 
-    // Snake pattern: reverse direction on odd rows
-    const actualCol = row % 2 === 0 ? col : nodesPerRow - 1 - col;
+  // Reduced amplitude to ensure it never touches the screen edge
+  // Center is 250. Swing is 100. Range: 150px to 350px. 
+  // Safe zone of 150px on each side.
+  const AMPLITUDE = 100;
+  const FREQUENCY = 0.5;
 
-    const spacing = 150;
-    const startX = 100;
-    const startY = 100;
+  const BOTTOM_PADDING = 200;
+  const TOP_PADDING = 200;
 
-    return {
-      x: startX + actualCol * spacing,
-      y: startY + row * spacing,
-    };
+  const MAP_HEIGHT = (progress.length * LEVEL_SPACING) + BOTTOM_PADDING + TOP_PADDING;
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // --- MATH HELPERS ---
+
+  const getNodePosition = (index: number) => {
+    // Y: Starts at bottom, moves up
+    const y = MAP_HEIGHT - BOTTOM_PADDING - (index * LEVEL_SPACING);
+    // X: Sine wave based on fixed GRID_WIDTH
+    const x = (GRID_WIDTH / 2) + (AMPLITUDE * Math.sin(index * FREQUENCY));
+    return { x, y };
   };
 
+  const generateRiverPath = () => {
+    let path = "";
+    const steps = 150; // Higher resolution for smoother curves
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      // Start/End points extended well beyond the visible nodes
+      const startY = MAP_HEIGHT;
+      const endY = 0;
+
+      const currentY = startY - ((startY - endY) * t);
+
+      // Reverse engineer the index from Y to get the X curve
+      // (This matches the node math perfectly)
+      const logicalIndex = (MAP_HEIGHT - BOTTOM_PADDING - currentY) / LEVEL_SPACING;
+      const currentX = (GRID_WIDTH / 2) + (AMPLITUDE * Math.sin(logicalIndex * FREQUENCY));
+
+      const command = i === 0 ? "M" : "L";
+      path += `${command} ${currentX} ${currentY} `;
+    }
+    return path;
+  };
+
+  // Auto-scroll to unlocked level
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      const currentLevelIndex = progress.findLastIndex(p => p.unlocked) || 0;
+      const pos = getNodePosition(currentLevelIndex);
+
+      // Center the camera on the node
+      const scrollY = pos.y - (window.innerHeight / 2);
+
+      scrollContainerRef.current.scrollTo({
+        top: scrollY,
+        behavior: 'instant' // Instant on load, smooth for users
+      });
+    }
+  }, [progress]);
+
   return (
-    <div className="relative w-full h-screen bg-gradient-to-br from-blue-300 via-blue-400 to-blue-500 overflow-auto">
-      {/* Title */}
-      <div className="text-center py-8">
-        <h1 className="text-6xl font-bold text-white drop-shadow-lg">
-          ?? OddFrogs - Level Select ??
-        </h1>
-      </div>
+    // OUTER WRAPPER: Full screen background
+    <div className="w-full h-screen bg-gradient-to-b from-teal-200 to-blue-400 overflow-hidden">
 
-      {/* River Path SVG */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ minHeight: '1000px' }}>
-        <defs>
-          <linearGradient id="riverGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.6" />
-            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.8" />
-          </linearGradient>
-        </defs>
+      {/* SCROLL CONTAINER: Handles the vertical scrolling */}
+      <div
+        ref={scrollContainerRef}
+        className="w-full h-full overflow-y-auto overflow-x-hidden scroll-smooth relative"
+      >
 
-        {/* Draw river path connecting nodes */}
-        {progress.slice(0, -1).map((level, index) => {
-          const start = getNodePosition(index);
-          const end = getNodePosition(index + 1);
+        {/* GAME CONTENT CONTAINER: Centered and Width-Constrained 
+            This ensures the math (based on 500px) always looks correct,
+            scaling down for phones or centering on desktop.
+        */}
+        <div
+          className="relative mx-auto"
+          style={{
+            height: `${MAP_HEIGHT}px`,
+            width: '100%',
+            maxWidth: '500px' // Matches GRID_WIDTH mostly, but allows flex
+          }}
+        >
 
-          return (
-            <line
-              key={`path-${index}`}
-              x1={start.x}
-              y1={start.y}
-              x2={end.x}
-              y2={end.y}
-              stroke="url(#riverGradient)"
-              strokeWidth="40"
-              strokeLinecap="round"
-            />
-          );
-        })}
-      </svg>
-
-      {/* Level Nodes */}
-      {progress.map((level, index) => {
-        const pos = getNodePosition(index);
-
-        return (
-          <div
-            key={level.levelNumber}
-            className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-            style={{
-              left: pos.x,
-              top: pos.y,
-            }}
-          >
-            <button
-              onClick={() => level.unlocked && onSelectLevel(level.levelNumber)}
-              disabled={!level.unlocked}
-              className={`
-                relative w-20 h-20 rounded-full border-4 font-bold text-2xl
-                transition-all duration-200 shadow-xl
-                ${level.unlocked
-                  ? 'bg-white border-yellow-400 hover:scale-110 cursor-pointer hover:shadow-2xl'
-                  : 'bg-gray-400 border-gray-500 cursor-not-allowed opacity-50'
-                }
-                ${level.completed ? 'bg-green-400 border-green-600' : ''}
-              `}
-            >
-              {level.levelNumber}
-
-              {/* Completion Stars */}
-              {level.completed && level.stars > 0 && (
-                <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 flex gap-1">
-                  {Array.from({ length: level.stars }).map((_, i) => (
-                    <span key={i} className="text-yellow-400 text-xl">?</span>
-                  ))}
-                </div>
-              )}
-
-              {/* Lock Icon */}
-              {!level.unlocked && (
-                <span className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-3xl">
-                  ??
-                </span>
-              )}
-            </button>
+          {/* 1. TITLE (Floating in the game world) */}
+          <div className="absolute top-20 left-0 w-full text-center z-20 pointer-events-none">
+            <h1 className="text-4xl font-black text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] tracking-wider">
+              FROG SAGA
+            </h1>
           </div>
-        );
-      })}
+
+          {/* 2. THE RIVER LAYER (SVG) */}
+          <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
+            <svg
+              width="100%"
+              height="100%"
+              viewBox={`0 0 ${GRID_WIDTH} ${MAP_HEIGHT}`}
+              // 'slice' ensures the river is never squashed.
+              // It will crop the sides if the screen is narrower than the design, 
+              // BUT our safe zones (amplitude) prevent content loss.
+              preserveAspectRatio="xMidYMid slice"
+              className="drop-shadow-xl"
+            >
+              <defs>
+                <linearGradient id="riverGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#60a5fa" />
+                  <stop offset="50%" stopColor="#3b82f6" />
+                  <stop offset="100%" stopColor="#2563eb" />
+                </linearGradient>
+              </defs>
+
+              {/* The River Water */}
+              <path
+                d={generateRiverPath()}
+                stroke="url(#riverGradient)"
+                strokeWidth="110"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {/* Water Highlights */}
+              <path
+                d={generateRiverPath()}
+                stroke="#93c5fd"
+                strokeWidth="15"
+                fill="none"
+                opacity="0.3"
+                transform="translate(-20, 0)"
+              />
+              <path
+                d={generateRiverPath()}
+                stroke="#1e3a8a"
+                strokeWidth="5"
+                fill="none"
+                opacity="0.1"
+                transform="translate(30, 0)"
+              />
+            </svg>
+          </div>
+
+          {/* 3. THE NODE LAYER */}
+          {progress.map((level, index) => {
+            const pos = getNodePosition(index);
+
+            // Map the GRID_WIDTH coordinate to a percentage for CSS
+            const leftPercent = (pos.x / GRID_WIDTH) * 100;
+
+            return (
+              <div
+                key={level.levelNumber}
+                className="absolute transform -translate-x-1/2 -translate-y-1/2 z-10"
+                style={{
+                  left: `${leftPercent}%`,
+                  top: `${pos.y}px`,
+                }}
+              >
+                <button
+                  onClick={() => level.unlocked && onSelectLevel(level.levelNumber)}
+                  disabled={!level.unlocked}
+                  className={`
+                    relative w-20 h-20 rounded-full border-[6px] 
+                    flex items-center justify-center
+                    transition-all duration-200 active:scale-95
+                    ${level.unlocked
+                      ? 'bg-yellow-100 border-yellow-400 cursor-pointer shadow-[0_4px_0_#b45309] hover:-translate-y-1'
+                      : 'bg-slate-300 border-slate-400 cursor-not-allowed text-slate-500 shadow-none'
+                    }
+                    ${level.completed ? 'bg-green-100 border-green-500 shadow-[0_4px_0_#15803d]' : ''}
+                  `}
+                >
+                  {level.unlocked ? (
+                    <span className={`text-2xl font-black ${level.completed ? 'text-green-700' : 'text-yellow-700'}`}>
+                      {level.levelNumber}
+                    </span>
+                  ) : (
+                    <span className="text-2xl">🔒</span>
+                  )}
+
+                  {/* Stars */}
+                  {level.completed && (
+                    <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex gap-0.5">
+                      {[1, 2, 3].map(star => (
+                        <svg key={star} className={`w-5 h-5 ${star <= level.stars ? 'text-yellow-400 fill-yellow-400' : 'text-gray-400 fill-gray-400'}`} viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+
+          {/* Start Marker */}
+          <div
+            className="absolute w-full text-center pointer-events-none"
+            style={{ top: `${MAP_HEIGHT - 80}px` }}
+          >
+            <div className="inline-block px-4 py-1 bg-blue-600 text-white rounded-full text-sm font-bold shadow-lg animate-bounce">
+              START
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
   );
 }
