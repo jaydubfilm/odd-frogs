@@ -8,7 +8,7 @@ import { generateRandomLevel } from './game/utils/LevelGenerator';
 import './styles/index.css';
 
 function App() {
-  const [level, setLevel] = useState(LEVEL_1); 
+  const [level, setLevel] = useState(LEVEL_1);
   const [levelKey, setLevelKey] = useState(0);
   const [gameState, setGameState] = useState<GameState>({
     lives: 3,
@@ -17,18 +17,27 @@ function App() {
     score: 0,
     isPaused: false,
     isGameOver: false,
+    isVictory: false,  // ← ADD THIS
     selectedFrogType: null,
     selectedGridCell: null,
+    gameSpeed: 1,  // ← ADD THIS
+  });
+
+  // ← ADD THIS STATE
+  const [waveInfo, setWaveInfo] = useState({
+    current: 0,
+    total: 0,
+    timeUntilNext: 0
   });
 
   // Generate random level on mount
   useEffect(() => {
-    console.log('LEVEL_1.streams:', LEVEL_1.streams); // ADD
+    console.log('LEVEL_1.streams:', LEVEL_1.streams);
     const randomLevel = generateRandomLevel();
-    console.log('randomLevel.streams:', randomLevel.streams); // ADD
+    console.log('randomLevel.streams:', randomLevel.streams);
     randomLevel.waves = LEVEL_1.waves;
     setLevel(randomLevel);
-    setLevelKey(k => k + 1); 
+    setLevelKey(k => k + 1);
   }, []);
 
   const handleSelectFrog = (frogType: FrogType) => {
@@ -37,11 +46,16 @@ function App() {
       selectedFrogType: prev.selectedFrogType === frogType ? null : frogType,
     }));
   };
-  
+
   const handleGameStateChange = (newState: GameState) => {
     setGameState(newState);
   };
-  
+
+  // ← ADD THIS HANDLER
+  const handleWaveInfoChange = (newWaveInfo: { current: number; total: number; timeUntilNext: number }) => {
+    setWaveInfo(newWaveInfo);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
       <div className="container mx-auto px-4 py-8">
@@ -54,7 +68,7 @@ function App() {
             Defend the pond from hungry invaders!
           </p>
         </div>
-        
+
         {/* Main Game Area */}
         <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
           {/* Left Panel - Frog Selector */}
@@ -65,21 +79,22 @@ function App() {
               playerMoney={gameState.money}
             />
           </div>
-          
+
           {/* Center - Game Canvas */}
           <div className="flex-shrink-0">
             <GameCanvas
               key={levelKey}
-              level={level} 
+              level={level}
               selectedFrogType={gameState.selectedFrogType}
               onGameStateChange={handleGameStateChange}
+              onWaveInfoChange={handleWaveInfoChange}  
             />
           </div>
-          
+
           {/* Right Panel - Game Stats */}
           <div className="w-full lg:w-80">
-            <GameStats gameState={gameState} />
-            
+            <GameStats gameState={gameState} waveInfo={waveInfo} />  
+
             {/* Instructions */}
             <div className="mt-4 bg-white/90 rounded-lg p-4 shadow-lg">
               <h3 className="text-lg font-bold text-gray-800 mb-2">
@@ -95,7 +110,7 @@ function App() {
             </div>
           </div>
         </div>
-        
+
         {/* Footer */}
         <div className="mt-8 text-center text-white/70 text-sm">
           <p>Created with React, TypeScript, and Canvas API</p>

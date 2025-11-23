@@ -269,37 +269,16 @@ export class Renderer {
   }
 
   renderUI(gameState: GameState, waveSystem: any, totalWaves: number, foods: Map<string, FoodData>): void {
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, 40);
-
-    this.ctx.fillStyle = 'white';
-    this.ctx.font = 'bold 16px Arial';
-    this.ctx.textAlign = 'left';
-
-    this.ctx.fillText(`Lives: ${gameState.lives}`, 10, 25);
-    this.ctx.fillText(`Money: $${gameState.money}`, 100, 25);
-    this.ctx.fillText(`Wave: ${gameState.wave}/${totalWaves}`, 220, 25);
-    this.ctx.fillText(`Score: ${gameState.score}`, 310, 25);
+    // REMOVE the top black bar and stats - those will be in React UI panel
 
     const currentTime = performance.now() / 1000;
     const timeRemaining = waveSystem.getTimeUntilNextWave(currentTime);
     const isLastWave = gameState.wave >= totalWaves;
 
-    // Show countdown timer (only if not last wave and not victory)
-    if (timeRemaining > 0 && !gameState.isVictory && !isLastWave) {
-      const minutes = Math.floor(timeRemaining / 60);
-      const seconds = Math.floor(timeRemaining % 60);
-      const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-      this.ctx.fillStyle = '#FFD700';
-      this.ctx.textAlign = 'right';
-      this.ctx.fillText(`Next wave in ${timeString}`, GAME_CONFIG.canvasWidth - 10, 25);
-    }
-
     // Show "Call Next Wave" button (only if not last wave and not victory)
-    if (waveSystem.canCallNextWave(currentTime, foods) && !gameState.isVictory && !isLastWave) {  // ← ADD foods
+    if (waveSystem.canCallNextWave(currentTime, foods) && !gameState.isVictory && !isLastWave) {
       const buttonX = GAME_CONFIG.canvasWidth - 160;
-      const buttonY = 50;
+      const buttonY = 10;  // ← MOVED UP since no top bar now
       const buttonWidth = 150;
       const buttonHeight = 35;
 
@@ -315,28 +294,27 @@ export class Renderer {
       this.ctx.fillStyle = 'white';
       this.ctx.font = 'bold 14px Arial';
       this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
       this.ctx.fillText('CALL NEXT WAVE', buttonX + buttonWidth / 2, buttonY + 14);
       this.ctx.font = '11px Arial';
       this.ctx.fillStyle = '#FFD700';
       this.ctx.fillText(`(+$${bonus} bonus)`, buttonX + buttonWidth / 2, buttonY + 28);
     }
 
+    // Speed control button (bottom right)
     if (!gameState.isGameOver && !gameState.isVictory) {
       const buttonX = GAME_CONFIG.canvasWidth - 80;
       const buttonY = GAME_CONFIG.canvasHeight - 50;
       const buttonWidth = 70;
       const buttonHeight = 40;
 
-      // Button background
       this.ctx.fillStyle = gameState.gameSpeed === 1 ? '#4A90E2' : '#FF6B35';
       this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
 
-      // Button border
       this.ctx.strokeStyle = gameState.gameSpeed === 1 ? '#357ABD' : '#E85A2B';
       this.ctx.lineWidth = 2;
       this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
 
-      // Speed icon/text
       this.ctx.fillStyle = 'white';
       this.ctx.font = 'bold 24px Arial';
       this.ctx.textAlign = 'center';
@@ -348,6 +326,7 @@ export class Renderer {
       );
     }
 
+    // Victory screen
     if (gameState.isVictory) {
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
@@ -365,7 +344,6 @@ export class Renderer {
         GAME_CONFIG.canvasHeight / 2 + 20
       );
 
-      // Restart button
       const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
       const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
       const buttonWidth = 150;
@@ -383,13 +361,8 @@ export class Renderer {
       this.ctx.fillText('RESTART', GAME_CONFIG.canvasWidth / 2, buttonY + 26);
     }
 
+    // Game Over screen
     if (gameState.isGameOver) {
-
-      if (this.gameOverStartTime === 0) {
-        this.gameOverStartTime = performance.now();
-      }
-      const fadeProgress = Math.min((performance.now() - this.gameOverStartTime) / 1000, 1);
-
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
 
@@ -406,36 +379,24 @@ export class Renderer {
         GAME_CONFIG.canvasHeight / 2 + 50
       );
 
-      // Restart button
       const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
       const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
       const buttonWidth = 150;
       const buttonHeight = 40;
 
+      this.ctx.fillStyle = '#4CAF50';
+      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
 
-      // Only show button after fade completes
-      if (fadeProgress >= 0.5) {
-        const buttonAlpha = (fadeProgress - 0.5) * 2; // Fade in from 0.5s to 1s
+      this.ctx.strokeStyle = '#45a049';
+      this.ctx.lineWidth = 3;
+      this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
 
-        // Button background
-        this.ctx.fillStyle = `rgba(76, 175, 80, ${buttonAlpha})`;
-        this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
-
-        // Button border
-        this.ctx.strokeStyle = '#45a049';
-        this.ctx.lineWidth = 3;
-        this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
-
-        // Button text
-        this.ctx.fillStyle = 'white';
-        this.ctx.font = 'bold 20px Arial';
-        this.ctx.fillText('RESTART', GAME_CONFIG.canvasWidth / 2, buttonY + 26);
-      }
-    } else {
-      // Reset timer when game is playing
-      this.gameOverStartTime = 0;
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 20px Arial';
+      this.ctx.fillText('RESTART', GAME_CONFIG.canvasWidth / 2, buttonY + 26);
     }
   }
+
   private renderLilyRemovalTooltip(
     cell: GridCell,
     canAfford: boolean

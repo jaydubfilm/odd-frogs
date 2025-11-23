@@ -1,14 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { GameEngine } from '@game/GameEngine';
 import { LevelData, GameState, FrogType } from '../../types/game';
 
 interface GameCanvasProps {
   level: LevelData;
-  selectedFrogType: FrogType | null;  
+  selectedFrogType: FrogType | null;
   onGameStateChange?: (state: GameState) => void;
+  onWaveInfoChange?: (waveInfo: { current: number; total: number; timeUntilNext: number }) => void;  // ← ADD THIS
 }
 
-export const GameCanvas: React.FC<GameCanvasProps> = ({ level, selectedFrogType, onGameStateChange }) => {
+export const GameCanvas: React.FC<GameCanvasProps> = ({
+  level,
+  selectedFrogType,
+  onGameStateChange,
+  onWaveInfoChange  // ← ADD THIS
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameEngineRef = useRef<GameEngine | null>(null);
   const initializationRef = useRef(false);
@@ -46,20 +52,26 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, selectedFrogType,
     }
   }, [selectedFrogType]);
 
-  // Expose game engine methods to parent component
+  // Expose game engine state to parent component
   useEffect(() => {
-    if (!gameEngineRef.current || !onGameStateChange) return;
-    
+    if (!gameEngineRef.current) return;
+
     const interval = setInterval(() => {
       if (gameEngineRef.current) {
-        const state = gameEngineRef.current.getGameState();
-        onGameStateChange(state);
+        if (onGameStateChange) {
+          const state = gameEngineRef.current.getGameState();
+          onGameStateChange(state);
+        }
+        if (onWaveInfoChange) {  // ← ADD THIS
+          const waveInfo = gameEngineRef.current.getWaveInfo();
+          onWaveInfoChange(waveInfo);
+        }
       }
     }, 100);
-    
+
     return () => clearInterval(interval);
-  }, [onGameStateChange]);
-  
+  }, [onGameStateChange, onWaveInfoChange]);  // ← ADD onWaveInfoChange to dependencies
+
   return (
     <canvas
       ref={canvasRef}

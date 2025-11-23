@@ -457,4 +457,17 @@ export class GameEngine {
     return this.hoveredCell;
   }
 
+  getWaveInfo(): { current: number; total: number; timeUntilNext: number } {
+    if (!this.currentLevel) {
+      return { current: 0, total: 0, timeUntilNext: 0 };
+    }
+
+    const currentTime = performance.now() / 1000;
+    return {
+      current: this.gameState.wave,
+      total: this.currentLevel.waves.length,
+      timeUntilNext: this.waveSystem.getTimeUntilNextWave(currentTime)
+    };
+  }
+
 }
