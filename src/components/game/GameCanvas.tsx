@@ -10,13 +10,15 @@ interface GameCanvasProps {
   selectedFrogType: FrogType | null;
   onGameStateChange?: (state: GameState) => void;
   onWaveInfoChange?: (waveInfo: { current: number; total: number; timeUntilNext: number }) => void;
+  onLevelComplete?: () => void;
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
   level,
   selectedFrogType,
   onGameStateChange,
-  onWaveInfoChange
+  onWaveInfoChange,
+  onLevelComplete
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameEngineRef = useRef<GameEngine | null>(null);
@@ -26,6 +28,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   const [hoveredFrog, setHoveredFrog] = useState<FrogData | null>(null);
   const [upgradeMenuPosition, setUpgradeMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [currentGameState, setCurrentGameState] = useState<GameState | null>(null);
 
   // Initialize once
   useEffect(() => {
@@ -66,8 +69,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     const interval = setInterval(() => {
       if (gameEngineRef.current) {
+        const state = gameEngineRef.current.getGameState();
+
+        // Log when victory is detected
+        if (state.isVictory) {
+          console.log('🎉 GameCanvas detected victory in state update!', state);
+        }
+
+        setCurrentGameState(state);
+
         if (onGameStateChange) {
-          const state = gameEngineRef.current.getGameState();
           onGameStateChange(state);
         }
         if (onWaveInfoChange) {
@@ -79,6 +90,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     return () => clearInterval(interval);
   }, [onGameStateChange, onWaveInfoChange]);
+
+  // Detect victory and trigger level completion
+  useEffect(() => {
+    console.log('🔍 Victory check:', {
+      isVictory: currentGameState?.isVictory,
+      hasCallback: !!onLevelComplete,
+      currentGameState
+    });
+
+    if (currentGameState?.isVictory && onLevelComplete) {
+      console.log('✅ Victory detected! Calling onLevelComplete in 2 seconds...');
+
+      // Delay slightly so player can see victory screen
+      const timer = setTimeout(() => {
+        console.log('📞 Executing onLevelComplete callback NOW');
+        onLevelComplete();
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentGameState?.isVictory, onLevelComplete]);
 
   const handleCanvasClickCapture = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const gameEngine = gameEngineRef.current;

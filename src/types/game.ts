@@ -132,7 +132,8 @@ export interface GameState {
   score: number;
   isPaused: boolean;
   isGameOver: boolean;
-  isVictory: boolean; 
+  isVictory: boolean;
+  currentLevel: number;      
   selectedFrogType: FrogType | null;
   selectedGridCell: GridPosition | null;
   gameSpeed: number;
@@ -183,4 +184,17 @@ export interface StreamPath {
   laneSections: LaneSection[];
   offset: number;
   smoothPath?: SmoothPath;
+}
+
+export interface LevelProgress {
+  levelNumber: number;
+  completed: boolean;
+  stars: number; // 0-3 based on performance
+  unlocked: boolean;
+}
+
+export interface GameProgress {
+  levels: Map<number, LevelProgress>;
+  currentLevel: number;
+  highestUnlockedLevel: number;
 }

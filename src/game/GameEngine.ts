@@ -56,10 +56,11 @@ export class GameEngine {
       score: 0,
       isPaused: false,
       isGameOver: false,
-      isVictory: false, 
+      isVictory: false,
+      currentLevel: 1,
       selectedFrogType: null,
       selectedGridCell: null,
-      gameSpeed: 1, 
+      gameSpeed: 1,
     };
     
     // Initialize systems
@@ -95,6 +96,7 @@ export class GameEngine {
     this.gameState.isVictory = false;
     this.gameState.isPaused = false;
     this.gameState.gameSpeed = 1;
+    this.gameState.currentLevel = 1;
 
     // Initialize grid from level layout
     this.initializeGrid(level);

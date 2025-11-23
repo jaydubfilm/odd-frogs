@@ -326,39 +326,29 @@ export class Renderer {
       );
     }
 
-    // Victory screen
     if (gameState.isVictory) {
-      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      // Victory screen
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
 
       this.ctx.fillStyle = '#FFD700';
       this.ctx.font = 'bold 48px Arial';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText('VICTORY!', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 - 30);
+      this.ctx.fillText('VICTORY!', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 - 80);
+
+      // Level complete message
+      this.ctx.fillStyle = '#FFFFFF';
+      this.ctx.font = '24px Arial';
+      this.ctx.fillText('Level Complete!', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 - 30);
+      this.ctx.fillText('Returning to map...', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 + 10);
 
       this.ctx.fillStyle = 'white';
-      this.ctx.font = '24px Arial';
+      this.ctx.font = '20px Arial';
       this.ctx.fillText(
         `Final Score: ${gameState.score}`,
         GAME_CONFIG.canvasWidth / 2,
-        GAME_CONFIG.canvasHeight / 2 + 20
+        GAME_CONFIG.canvasHeight / 2 + 50
       );
-
-      const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
-      const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
-      const buttonWidth = 150;
-      const buttonHeight = 40;
-
-      this.ctx.fillStyle = '#4CAF50';
-      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
-
-      this.ctx.strokeStyle = '#45a049';
-      this.ctx.lineWidth = 3;
-      this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
-
-      this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 20px Arial';
-      this.ctx.fillText('RESTART', GAME_CONFIG.canvasWidth / 2, buttonY + 26);
     }
 
     // Game Over screen
