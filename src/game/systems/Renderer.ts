@@ -312,6 +312,33 @@ export class Renderer {
       this.ctx.fillText(`(+$${bonus} bonus)`, buttonX + buttonWidth / 2, buttonY + 28);
     }
 
+    if (!gameState.isGameOver && !gameState.isVictory) {
+      const buttonX = GAME_CONFIG.canvasWidth - 80;
+      const buttonY = GAME_CONFIG.canvasHeight - 50;
+      const buttonWidth = 70;
+      const buttonHeight = 40;
+
+      // Button background
+      this.ctx.fillStyle = gameState.gameSpeed === 1 ? '#4A90E2' : '#FF6B35';
+      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+      // Button border
+      this.ctx.strokeStyle = gameState.gameSpeed === 1 ? '#357ABD' : '#E85A2B';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+      // Speed icon/text
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 24px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(
+        gameState.gameSpeed === 1 ? '1x' : '2x',
+        buttonX + buttonWidth / 2,
+        buttonY + buttonHeight / 2
+      );
+    }
+
     if (gameState.isVictory) {
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);

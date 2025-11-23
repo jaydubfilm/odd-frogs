@@ -54,6 +54,7 @@ export class GameEngine {
       isVictory: false, 
       selectedFrogType: null,
       selectedGridCell: null,
+      gameSpeed: 1, 
     };
     
     // Initialize systems
@@ -83,7 +84,8 @@ export class GameEngine {
     this.gameState.score = 0;
     this.gameState.isGameOver = false;
     this.gameState.isVictory = false;
-    this.gameState.isPaused = false;  // ← ADD THIS
+    this.gameState.isPaused = false;
+    this.gameState.gameSpeed = 1;
 
     // Initialize grid from level layout
     this.initializeGrid(level);
@@ -171,7 +173,7 @@ export class GameEngine {
     this.lastFrameTime = currentTime;
     
     if (!this.gameState.isPaused && !this.gameState.isGameOver) {
-      this.update(deltaTime);
+      this.update(deltaTime * this.gameState.gameSpeed); 
     }
     
     this.render();
@@ -286,9 +288,21 @@ export class GameEngine {
       }
     }
 
+    // Check for speed button click (bottom right)
+    const speedButtonX = GAME_CONFIG.canvasWidth - 80;
+    const speedButtonY = GAME_CONFIG.canvasHeight - 50;
+    const speedButtonWidth = 70;
+    const speedButtonHeight = 40;
+
+    if (x >= speedButtonX && x <= speedButtonX + speedButtonWidth &&
+      y >= speedButtonY && y <= speedButtonY + speedButtonHeight) {
+      this.toggleSpeed();
+      return;
+    }
+
     // Check for "Call Next Wave" button click
     const currentTime = performance.now() / 1000;
-    if (this.waveSystem.canCallNextWave(currentTime, this.foods)) { 
+    if (this.waveSystem.canCallNextWave(currentTime, this.foods)) {
       const buttonX = GAME_CONFIG.canvasWidth - 160;
       const buttonY = 50;
       const buttonWidth = 150;
@@ -368,5 +382,10 @@ export class GameEngine {
   destroy(): void {
     this.stop();
     this.canvas.removeEventListener('click', this.handleCanvasClick);
+  }
+
+  toggleSpeed(): void {
+    this.gameState.gameSpeed = this.gameState.gameSpeed === 1 ? 2 : 1;
+    console.log(`Game speed: ${this.gameState.gameSpeed}x`);
   }
 }

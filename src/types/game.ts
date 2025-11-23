@@ -133,6 +133,7 @@ export interface GameState {
   isVictory: boolean; 
   selectedFrogType: FrogType | null;
   selectedGridCell: GridPosition | null;
+  gameSpeed: number;
 }
 
 export interface LevelData {
