@@ -470,4 +470,12 @@ export class GameEngine {
     };
   }
 
+  getFrogs(): Map<string, FrogData> {
+    return this.frogs;
+  }
+
+  updateMoney(amount: number): void {
+    this.gameState.money = amount;
+  }
+
 }

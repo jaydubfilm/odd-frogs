@@ -2,6 +2,7 @@
 // Core game types and interfaces
 
 import { SmoothPath } from '../game/utils/PathGenerator';
+import { FrogUpgradeState } from './upgrades'; 
 
 export interface Position {
   x: number;
@@ -70,10 +71,11 @@ export interface FrogData {
   stats: FrogStats;
   lastAttackTime: number;
   targetFood: string | null;
-  tongue?: {                  
+  upgradeState: FrogUpgradeState;  
+  tongue?: {
     active: boolean;
     targetPosition: Position;
-    progress: number;           // 0 to 1 (extend) then 1 to 0 (retract)
+    progress: number;
     startTime: number;
   };
 }

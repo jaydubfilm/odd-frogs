@@ -1,23 +1,30 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import { GameEngine } from '@game/GameEngine';
-import { LevelData, GameState, FrogType } from '../../types/game';
+import { LevelData, GameState, FrogType, FrogData } from '../../types/game';
+import { RadialUpgradeMenu } from './RadialUpgradeMenu';
+import { UpgradeSystem } from '../../game/systems/UpgradeSystem';
+import { GAME_CONFIG } from '../../data/constants';
 
 interface GameCanvasProps {
   level: LevelData;
   selectedFrogType: FrogType | null;
   onGameStateChange?: (state: GameState) => void;
-  onWaveInfoChange?: (waveInfo: { current: number; total: number; timeUntilNext: number }) => void;  // ← ADD THIS
+  onWaveInfoChange?: (waveInfo: { current: number; total: number; timeUntilNext: number }) => void;
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
   level,
   selectedFrogType,
   onGameStateChange,
-  onWaveInfoChange  // ← ADD THIS
+  onWaveInfoChange
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameEngineRef = useRef<GameEngine | null>(null);
   const initializationRef = useRef(false);
+  const upgradeSystemRef = useRef(new UpgradeSystem());
+
+  const [hoveredFrog, setHoveredFrog] = useState<FrogData | null>(null);
+  const [upgradeMenuPosition, setUpgradeMenuPosition] = useState<{ x: number; y: number } | null>(null);
 
   // Initialize once
   useEffect(() => {
@@ -37,7 +44,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       }
       initializationRef.current = false;
     };
-  }, []); // Empty array - run once only
+  }, []);
 
   // Handle level changes separately
   useEffect(() => {
@@ -62,7 +69,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           const state = gameEngineRef.current.getGameState();
           onGameStateChange(state);
         }
-        if (onWaveInfoChange) {  // ← ADD THIS
+        if (onWaveInfoChange) {
           const waveInfo = gameEngineRef.current.getWaveInfo();
           onWaveInfoChange(waveInfo);
         }
@@ -70,18 +77,122 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [onGameStateChange, onWaveInfoChange]);  // ← ADD onWaveInfoChange to dependencies
+  }, [onGameStateChange, onWaveInfoChange]);
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    const gameEngine = gameEngineRef.current;
+    if (!canvas || !gameEngine) return;
+
+    // Close menu if clicking elsewhere
+    if (hoveredFrog) {
+      setHoveredFrog(null);
+      setUpgradeMenuPosition(null);
+    }
+  };
+
+  const handleFrogClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    const gameEngine = gameEngineRef.current;
+    if (!canvas || !gameEngine) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Get frogs from game engine
+    const frogsMap = gameEngine.getFrogs();
+    const frogsArray = Array.from(frogsMap.values()) as FrogData[];
+
+    // Account for canvas margins
+    const topMargin = 60;
+    const leftMargin = 60;
+
+    // Check if clicking on an EXISTING frog
+    let foundFrog: FrogData | null = null;
+    for (const frog of frogsArray) {
+      const frogPos = {
+        x: frog.gridPosition.col * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + leftMargin,
+        y: frog.gridPosition.row * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + topMargin,
+      };
+      const distance = Math.sqrt((x - frogPos.x) ** 2 + (y - frogPos.y) ** 2);
+      if (distance < GAME_CONFIG.cellSize / 2) {
+        foundFrog = frog;
+        break;
+      }
+    }
+
+    if (foundFrog) {
+      // Clicked on existing frog - show upgrade menu
+      setHoveredFrog(foundFrog);
+      // Position menu at canvas-relative coordinates where the frog is
+      const frogCanvasX = foundFrog.gridPosition.col * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + leftMargin;
+      const frogCanvasY = foundFrog.gridPosition.row * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + topMargin;
+      setUpgradeMenuPosition({ x: frogCanvasX, y: frogCanvasY });
+
+      // Prevent the click from reaching GameEngine's click handler
+      e.stopPropagation();
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault(); // Prevent default context menu
+
+    // Close upgrade menu on right-click
+    if (hoveredFrog) {
+      setHoveredFrog(null);
+      setUpgradeMenuPosition(null);
+    }
+  };
+
+  const handlePurchaseUpgrade = (nodeId: string) => {
+    if (!hoveredFrog || !gameEngineRef.current) return;
+
+    const cost = upgradeSystemRef.current.purchaseUpgrade(hoveredFrog, nodeId);
+    if (cost > 0) {
+      const currentState = gameEngineRef.current.getGameState();
+      gameEngineRef.current.updateMoney(currentState.money - cost);
+
+      if (onGameStateChange) {
+        onGameStateChange({
+          ...currentState,
+          money: currentState.money - cost,
+        });
+      }
+    }
+  };
+
+  const handleCloseMenu = () => {
+    setHoveredFrog(null);
+    setUpgradeMenuPosition(null);
+  };
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={600}
-      height={660}
-      style={{
-        display: 'block',
-        width: '600px',
-        height: '660px'
-      }}
-    />
+    <div className="relative">
+      <canvas
+        ref={canvasRef}
+        width={600}
+        height={660}
+        onClickCapture={handleFrogClick}
+        onClick={handleCanvasClick}
+        onContextMenu={handleContextMenu}
+        style={{
+          display: 'block',
+          width: '600px',
+          height: '660px'
+        }}
+      />
+
+      {hoveredFrog && upgradeMenuPosition && (
+        <RadialUpgradeMenu
+          frog={hoveredFrog}
+          position={upgradeMenuPosition}
+          availableUpgrades={upgradeSystemRef.current.getAvailableUpgrades(hoveredFrog)}
+          playerMoney={gameEngineRef.current?.getGameState().money || 0}
+          onPurchase={handlePurchaseUpgrade}
+          onClose={handleCloseMenu}
+        />
+      )}
+    </div>
   );
 };

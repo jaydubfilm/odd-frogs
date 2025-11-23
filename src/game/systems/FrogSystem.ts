@@ -1,12 +1,12 @@
 ﻿import { FrogData, FrogType, GridPosition, FoodData, GridCell } from '../../types/game';
 import { FROG_STATS, GAME_CONFIG, UPGRADE_MULTIPLIER } from '@data/constants';
-
+import { createDefaultUpgradeTree } from '../../data/UpgradeTrees';
 export class FrogSystem {
   private frogIdCounter = 0;
-  
+
   createFrog(type: FrogType, gridPosition: GridPosition): FrogData {
     const baseStats = { ...FROG_STATS[type] };
-    
+
     return {
       id: `frog-${this.frogIdCounter++}`,
       type,
@@ -15,6 +15,10 @@ export class FrogSystem {
       stats: baseStats,
       lastAttackTime: 0,
       targetFood: null,
+      upgradeState: {                       
+        tree: createDefaultUpgradeTree(),
+        totalSpent: 0,
+      },
     };
   }
  
