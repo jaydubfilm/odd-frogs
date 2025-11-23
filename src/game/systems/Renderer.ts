@@ -259,7 +259,7 @@ export class Renderer {
     this.ctx.strokeRect(x, y, barWidth, barHeight);
   }
 
-  renderUI(gameState: GameState, waveSystem: any, totalWaves: number): void {
+  renderUI(gameState: GameState, waveSystem: any, totalWaves: number, foods: Map<string, FoodData>): void {
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, 40);
 
@@ -269,15 +269,15 @@ export class Renderer {
 
     this.ctx.fillText(`Lives: ${gameState.lives}`, 10, 25);
     this.ctx.fillText(`Money: $${gameState.money}`, 100, 25);
-    this.ctx.fillText(`Wave: ${gameState.wave}/${totalWaves}`, 220, 25); 
+    this.ctx.fillText(`Wave: ${gameState.wave}/${totalWaves}`, 220, 25);
     this.ctx.fillText(`Score: ${gameState.score}`, 310, 25);
 
-    // Show countdown timer
     const currentTime = performance.now() / 1000;
     const timeRemaining = waveSystem.getTimeUntilNextWave(currentTime);
-    const isLastWave = gameState.wave >= totalWaves;  
+    const isLastWave = gameState.wave >= totalWaves;
 
-    if (timeRemaining > 0 && !gameState.isVictory && !isLastWave) { 
+    // Show countdown timer (only if not last wave and not victory)
+    if (timeRemaining > 0 && !gameState.isVictory && !isLastWave) {
       const minutes = Math.floor(timeRemaining / 60);
       const seconds = Math.floor(timeRemaining % 60);
       const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -288,25 +288,21 @@ export class Renderer {
     }
 
     // Show "Call Next Wave" button (only if not last wave and not victory)
-    if (waveSystem.canCallNextWave(currentTime) && !gameState.isVictory && !isLastWave) {  // ← ADD isLastWave check
+    if (waveSystem.canCallNextWave(currentTime, foods) && !gameState.isVictory && !isLastWave) {  // ← ADD foods
       const buttonX = GAME_CONFIG.canvasWidth - 160;
       const buttonY = 50;
       const buttonWidth = 150;
       const buttonHeight = 35;
 
-      // Calculate bonus
       const bonus = Math.floor(timeRemaining * 10);
 
-      // Button background
       this.ctx.fillStyle = '#FFA500';
       this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
 
-      // Button border
       this.ctx.strokeStyle = '#FF8C00';
       this.ctx.lineWidth = 2;
       this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
 
-      // Button text
       this.ctx.fillStyle = 'white';
       this.ctx.font = 'bold 14px Arial';
       this.ctx.textAlign = 'center';

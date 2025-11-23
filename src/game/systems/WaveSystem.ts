@@ -1,4 +1,4 @@
-import { WaveData, FoodData, StreamPath } from '../../types/game';
+﻿import { WaveData, FoodData, StreamPath } from '../../types/game';
 import { FoodSystem } from './FoodSystem';
 
 interface SpawnQueueItem {
@@ -92,17 +92,24 @@ export class WaveSystem {
     return complete;
   }
 
-  canCallNextWave(currentTime: number): boolean {
+  canCallNextWave(currentTime: number, foods: Map<string, FoodData>): boolean {
     if (!this.currentWave || !this.isWaveActive) return false;
 
     const elapsed = currentTime - this.waveStartTime;
     const threshold = this.currentWave.duration * 0.25; // 25% of wave duration
 
-    return elapsed >= threshold;
+    // Can call next wave if:
+    // 1. All enemies spawned AND all enemies dead (immediate)
+    // OR
+    // 2. 25% of wave time has elapsed
+    const allEnemiesDead = this.spawnQueue.length === 0 && foods.size === 0;
+    const timeThresholdMet = elapsed >= threshold;
+
+    return allEnemiesDead || timeThresholdMet;
   }
 
-  callNextWaveEarly(currentTime: number): number {
-    if (!this.currentWave || !this.canCallNextWave(currentTime)) return 0;
+  callNextWaveEarly(currentTime: number, foods: Map<string, FoodData>): number {
+    if (!this.currentWave || !this.canCallNextWave(currentTime, foods)) return 0;  // ← ADD foods parameter
 
     const timeRemaining = this.nextWaveStartTime - currentTime;
     const totalDuration = this.currentWave.duration;

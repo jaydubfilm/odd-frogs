@@ -83,17 +83,19 @@ export class GameEngine {
     this.gameState.score = 0;
     this.gameState.isGameOver = false;
     this.gameState.isVictory = false;
-    
+    this.gameState.isPaused = false;  // ← ADD THIS
+
     // Initialize grid from level layout
     this.initializeGrid(level);
-    
+
     // Clear existing frogs and foods
     this.frogs.clear();
     this.foods.clear();
-    
+
     // Reset wave system
     this.waveSystem.reset();
 
+    // Start the first wave immediately
     if (level.waves.length > 0) {
       const currentTime = performance.now() / 1000;
       this.gameState.wave = 1;
@@ -236,8 +238,9 @@ export class GameEngine {
     this.renderer.renderUI(
       this.gameState,
       this.waveSystem,
-      this.currentLevel.waves.length  
-    ); 
+      this.currentLevel.waves.length,
+      this.foods
+    );
   }
   
   private removeDestroyedFoods(): void {
@@ -285,7 +288,7 @@ export class GameEngine {
 
     // Check for "Call Next Wave" button click
     const currentTime = performance.now() / 1000;
-    if (this.waveSystem.canCallNextWave(currentTime)) {
+    if (this.waveSystem.canCallNextWave(currentTime, this.foods)) { 
       const buttonX = GAME_CONFIG.canvasWidth - 160;
       const buttonY = 50;
       const buttonWidth = 150;
@@ -342,7 +345,7 @@ export class GameEngine {
 
   callNextWave(): void {
     const currentTime = performance.now() / 1000;
-    const bonus = this.waveSystem.callNextWaveEarly(currentTime);
+    const bonus = this.waveSystem.callNextWaveEarly(currentTime, this.foods);  // ← ADD this.foods
 
     if (bonus > 0) {
       this.gameState.money += bonus;
