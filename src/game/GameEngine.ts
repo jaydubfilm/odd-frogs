@@ -23,6 +23,8 @@ export class GameEngine {
   private grid: GridCell[][] = [];
   private frogs: Map<string, FrogData> = new Map();
   private foods: Map<string, FoodData> = new Map();
+
+  private hoveredCell: GridPosition | null = null; 
   
   // Systems
   private renderer: Renderer;
@@ -71,9 +73,11 @@ export class GameEngine {
     // Bind methods
     this.gameLoop = this.gameLoop.bind(this);
     this.handleCanvasClick = this.handleCanvasClick.bind(this);
+    this.handleMouseMove = this.handleMouseMove.bind(this); 
     
     // Setup event listeners
     this.canvas.addEventListener('click', this.handleCanvasClick);
+    this.canvas.addEventListener('mousemove', this.handleMouseMove); 
   }
   
   loadLevel(level: LevelData): void {
@@ -102,6 +106,29 @@ export class GameEngine {
       const currentTime = performance.now() / 1000;
       this.gameState.wave = 1;
       this.waveSystem.startWave(level.waves[0], currentTime);
+    }
+  }
+
+  private handleMouseMove(event: MouseEvent): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    const gridPos = this.pixelToGrid(x, y);
+
+    // Update hovered cell
+    this.hoveredCell = gridPos;
+
+    // Change cursor if hovering over lily with lily
+    if (gridPos && !this.gameState.isGameOver && !this.gameState.isVictory) {
+      const cell = this.grid[gridPos.row]?.[gridPos.col];
+      if (cell?.type === CellType.LILYPAD_WITH_LILY) {
+        this.canvas.style.cursor = 'pointer';
+      } else {
+        this.canvas.style.cursor = 'default';
+      }
+    } else {
+      this.canvas.style.cursor = 'default';
     }
   }
   
@@ -234,7 +261,7 @@ export class GameEngine {
 
     this.renderer.renderBackground(this.ctx);
     this.renderer.renderStreams(this.currentLevel.streams);
-    this.renderer.renderGrid(this.grid);
+    this.renderer.renderGrid(this.grid, this.hoveredCell, this.gameState.money); 
     this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
     this.renderer.renderFoods(Array.from(this.foods.values()));
     this.renderer.renderUI(
@@ -317,9 +344,45 @@ export class GameEngine {
 
     const gridPos = this.pixelToGrid(x, y);
 
-    if (gridPos && this.gameState.selectedFrogType) {
-      this.placeFrog(gridPos, this.gameState.selectedFrogType);
+
+    if (gridPos) {
+      const cell = this.grid[gridPos.row][gridPos.col];
+
+      // Check if clicking on a lily pad with lily (make entire cell clickable)
+      if (cell.type === CellType.LILYPAD_WITH_LILY &&
+        !this.gameState.selectedFrogType) {  // ← Only if not placing a frog
+        console.log('Lily removal clicked!');
+        this.removeLily(gridPos);
+        return;
+      }
+
+      // Normal frog placement
+      if (this.gameState.selectedFrogType) {
+        this.placeFrog(gridPos, this.gameState.selectedFrogType);
+      }
     }
+  }
+
+  private removeLily(gridPos: GridPosition): boolean {
+    const cell = this.grid[gridPos.row][gridPos.col];
+
+    // Check if it's a lily pad with lily
+    if (cell.type !== CellType.LILYPAD_WITH_LILY) {
+      return false;
+    }
+
+    // Check if player has enough money
+    if (this.gameState.money < GAME_CONFIG.lilyRemovalCost) {
+      console.log('Not enough money to remove lily');
+      return false;
+    }
+
+    // Remove the lily
+    cell.type = CellType.LILYPAD;
+    this.gameState.money -= GAME_CONFIG.lilyRemovalCost; 
+
+    console.log(`Lily removed for $${GAME_CONFIG.lilyRemovalCost}`); 
+    return true;
   }
   
   private pixelToGrid(x: number, y: number): GridPosition | null {
@@ -382,10 +445,16 @@ export class GameEngine {
   destroy(): void {
     this.stop();
     this.canvas.removeEventListener('click', this.handleCanvasClick);
+    this.canvas.removeEventListener('mousemove', this.handleMouseMove); 
   }
 
   toggleSpeed(): void {
     this.gameState.gameSpeed = this.gameState.gameSpeed === 1 ? 2 : 1;
     console.log(`Game speed: ${this.gameState.gameSpeed}x`);
   }
+
+  getHoveredCell(): GridPosition | null {
+    return this.hoveredCell;
+  }
+
 }

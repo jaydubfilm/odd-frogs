@@ -1,5 +1,6 @@
 import { FrogType, FrogStats, FoodType, FoodStats, GameConfig } from '../types/game';
 
+
 export const GAME_CONFIG: GameConfig = {
   gridRows: 5,
   gridCols: 4,
@@ -7,7 +8,7 @@ export const GAME_CONFIG: GameConfig = {
   canvasWidth: 600,    // 5 * 120 (for channels 0-4)
   canvasHeight: 660,
   startingLives: 3,
-  lilyRemovalCost: 50,
+  lilyRemovalCost: 100,
 };
 
 export const FROG_STATS: Record<FrogType, FrogStats> = {

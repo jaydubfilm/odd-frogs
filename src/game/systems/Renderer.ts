@@ -1,4 +1,4 @@
-﻿import { GridCell, FrogData, FoodData, GameState, StreamPath, CellType } from '../../types/game';
+﻿import { GridCell, FrogData, FoodData, GameState, StreamPath, CellType, GridPosition } from '../../types/game';
 import { COLORS, GAME_CONFIG } from '@data/constants';
 
 export class Renderer {
@@ -46,10 +46,19 @@ export class Renderer {
   //    EXISTING RENDER METHODS (Unchanged)
   // =========================================================
 
-  renderGrid(grid: GridCell[][]): void {
+  renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number): void {
     grid.forEach(row => {
       row.forEach(cell => {
         this.renderCell(cell);
+
+        // Show lily removal tooltip if hovering over lily pad with lily
+        if (hoveredCell &&
+          cell.gridPosition.row === hoveredCell.row &&
+          cell.gridPosition.col === hoveredCell.col &&
+          cell.type === CellType.LILYPAD_WITH_LILY) {
+          const canAfford = money >= GAME_CONFIG.lilyRemovalCost;  // ← CHANGED
+          this.renderLilyRemovalTooltip(cell, canAfford);
+        }
       });
     });
   }
@@ -426,5 +435,35 @@ export class Renderer {
       // Reset timer when game is playing
       this.gameOverStartTime = 0;
     }
+  }
+  private renderLilyRemovalTooltip(
+    cell: GridCell,
+    canAfford: boolean
+  ): void {
+    const pos = cell.position;
+    const buttonWidth = 120;
+    const buttonHeight = 30;
+    const buttonX = pos.x - buttonWidth / 2;
+    const buttonY = pos.y - 50;
+
+    // Button background
+    this.ctx.fillStyle = canAfford ? 'rgba(255, 59, 48, 0.9)' : 'rgba(128, 128, 128, 0.9)';
+    this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+    // Button border
+    this.ctx.strokeStyle = canAfford ? '#E63946' : '#666';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+    // Button text
+    this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
+    this.ctx.font = 'bold 14px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText(
+      `Remove for $${GAME_CONFIG.lilyRemovalCost}`,  
+      pos.x,
+      buttonY + buttonHeight / 2
+    );
   }
 }
