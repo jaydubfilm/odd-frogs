@@ -201,7 +201,7 @@ export class GameEngine {
     this.renderer.renderBackground(this.ctx);
     this.renderer.renderStreams(this.currentLevel.streams);
     this.renderer.renderGrid(this.grid);
-    this.renderer.renderFrogs(Array.from(this.frogs.values()));
+    this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
     this.renderer.renderFoods(Array.from(this.foods.values()));
     this.renderer.renderUI(this.gameState);
   }
@@ -219,7 +219,7 @@ export class GameEngine {
   private checkFoodsReachedEnd(): void {
     for (const [id, food] of this.foods) {
       // Check if food has completed all path segments
-      if (this.foodSystem.hasReachedEnd(food, this.currentLevel!.streams)) {
+      if (this.foodSystem.hasReachedEnd(food)) {
         this.gameState.lives--;
         this.foods.delete(id);
         

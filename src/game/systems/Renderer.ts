@@ -1,4 +1,4 @@
-import { GridCell, FrogData, FoodData, GameState, StreamPath, CellType } from '../../types/game';
+﻿import { GridCell, FrogData, FoodData, GameState, StreamPath, CellType } from '../../types/game';
 import { COLORS, GAME_CONFIG } from '@data/constants';
 
 export class Renderer {
@@ -123,19 +123,17 @@ export class Renderer {
     this.ctx.stroke();
   }
 
-  renderFrogs(frogs: FrogData[]): void {
+  renderFrogs(frogs: FrogData[], grid: GridCell[][]): void {
     frogs.forEach(frog => {
-      this.renderFrog(frog);
+      this.renderFrog(frog, grid);
     });
   }
 
-  private renderFrog(frog: FrogData): void {
-    const pos = {
-      x: frog.gridPosition.col * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2,
-      y: frog.gridPosition.row * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2,
-    };
+  private renderFrog(frog: FrogData, grid: GridCell[][]): void {
+    const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
+    const pos = cell.position;
 
-    const size = GAME_CONFIG.cellSize * 0.5;
+    const size = GAME_CONFIG.cellSize * 0.5 * 0.9;  // ← Multiply by 0.9 for 10% smaller
 
     this.ctx.fillStyle = frog.stats.color;
     this.ctx.beginPath();
