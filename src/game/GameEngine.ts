@@ -1,0 +1,292 @@
+import { 
+  GameState, 
+  LevelData, 
+  GridCell, 
+  FrogData, 
+  FoodData,
+  GridPosition,
+  FrogType,
+  CellType,
+} from '../types/game';
+import { GAME_CONFIG } from '@data/constants';
+import { Renderer } from './systems/Renderer';
+import { FrogSystem } from './systems/FrogSystem';
+import { FoodSystem } from './systems/FoodSystem';
+import { CollisionSystem } from './systems/CollisionSystem';
+import { WaveSystem } from './systems/WaveSystem';
+
+export class GameEngine {
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private gameState: GameState;
+  private currentLevel: LevelData | null = null;
+  private grid: GridCell[][] = [];
+  private frogs: Map<string, FrogData> = new Map();
+  private foods: Map<string, FoodData> = new Map();
+  
+  // Systems
+  private renderer: Renderer;
+  private frogSystem: FrogSystem;
+  private foodSystem: FoodSystem;
+  private collisionSystem: CollisionSystem;
+  private waveSystem: WaveSystem;
+  
+  // Game loop
+  private lastFrameTime: number = 0;
+  private animationFrameId: number | null = null;
+  
+  constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) {
+      throw new Error('Failed to get canvas context');
+    }
+    this.ctx = context;
+    
+    // Initialize game state
+    this.gameState = {
+      lives: GAME_CONFIG.startingLives,
+      money: 0,
+      wave: 0,
+      score: 0,
+      isPaused: false,
+      isGameOver: false,
+      selectedFrogType: null,
+      selectedGridCell: null,
+    };
+    
+    // Initialize systems
+    this.renderer = new Renderer(this.ctx);
+    this.frogSystem = new FrogSystem();
+    this.foodSystem = new FoodSystem();
+    this.collisionSystem = new CollisionSystem();
+    this.waveSystem = new WaveSystem(this.foodSystem);
+    
+    // Setup canvas
+    this.canvas.width = GAME_CONFIG.canvasWidth;
+    this.canvas.height = GAME_CONFIG.canvasHeight;
+    
+    // Bind methods
+    this.gameLoop = this.gameLoop.bind(this);
+    this.handleCanvasClick = this.handleCanvasClick.bind(this);
+    
+    // Setup event listeners
+    this.canvas.addEventListener('click', this.handleCanvasClick);
+  }
+  
+  loadLevel(level: LevelData): void {
+    this.currentLevel = level;
+    this.gameState.money = level.startingMoney;
+    this.gameState.wave = 0;
+    this.gameState.lives = GAME_CONFIG.startingLives;
+    this.gameState.score = 0;
+    this.gameState.isGameOver = false;
+    
+    // Initialize grid from level layout
+    this.initializeGrid(level);
+    
+    // Clear existing frogs and foods
+    this.frogs.clear();
+    this.foods.clear();
+    
+    // Reset wave system
+    this.waveSystem.reset();
+  }
+  
+  private initializeGrid(level: LevelData): void {
+    this.grid = [];
+    const topMargin = 60;
+    const leftMargin = 60; // ADD THIS (centers 4 cols in 600px canvas)
+
+    for (let row = 0; row < GAME_CONFIG.gridRows; row++) {
+      const gridRow: GridCell[] = [];
+
+      for (let col = 0; col < GAME_CONFIG.gridCols; col++) {
+        const cellType = level.gridLayout[row][col];
+        const position = {
+          x: col * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + leftMargin, // ADD leftMargin
+          y: row * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + topMargin,
+        };
+        
+        gridRow.push({
+          type: cellType,
+          gridPosition: { row, col },
+          position,
+          frog: null,
+        });
+      }
+      
+      this.grid.push(gridRow);
+    }
+  }
+  
+  start(): void {
+    if (this.animationFrameId === null) {
+      this.lastFrameTime = performance.now();
+
+      this.render();
+
+      this.animationFrameId = requestAnimationFrame(this.gameLoop);
+    }
+  }
+  
+  stop(): void {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+  
+  pause(): void {
+    this.gameState.isPaused = true;
+  }
+  
+  resume(): void {
+    this.gameState.isPaused = false;
+  }
+  
+  private gameLoop(currentTime: number): void {
+    const deltaTime = (currentTime - this.lastFrameTime) / 1000; // Convert to seconds
+    this.lastFrameTime = currentTime;
+    
+    if (!this.gameState.isPaused && !this.gameState.isGameOver) {
+      this.update(deltaTime);
+    }
+    
+    this.render();
+    
+    this.animationFrameId = requestAnimationFrame(this.gameLoop);
+  }
+  
+  private update(deltaTime: number): void {
+    if (!this.currentLevel) return;
+    
+    const currentTime = performance.now() / 1000;
+    
+    // Update wave system
+    this.waveSystem.update(currentTime, this.foods, this.currentLevel.streams);
+    
+    // Start next wave if current is complete
+    if (this.waveSystem.isWaveComplete(this.foods) && this.gameState.wave < this.currentLevel.waves.length) {
+      const nextWave = this.currentLevel.waves[this.gameState.wave];
+      if (nextWave) {
+        this.gameState.wave++;
+        this.waveSystem.startWave(nextWave, currentTime);
+      }
+    }
+    
+    // Update food positions along paths
+    this.foodSystem.updateFoods(this.foods, this.currentLevel.streams, deltaTime);
+    
+    // Update frog attacks
+    this.frogSystem.updateFrogs(this.frogs, this.foods, this.grid, deltaTime);
+    
+    // Check for collisions and damage
+    this.collisionSystem.checkCollisions(this.frogs, this.foods);
+    
+    // Remove destroyed foods and award money
+    this.removeDestroyedFoods();
+    
+    // Check for foods that reached the end
+    this.checkFoodsReachedEnd();
+  }
+  
+  private render(): void {
+    if (!this.currentLevel) return;
+    
+    // Clear canvas
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    // Render game elements
+    this.renderer.renderBackground(this.ctx);
+    this.renderer.renderStreams(this.currentLevel.streams);
+    this.renderer.renderGrid(this.grid);
+    this.renderer.renderFrogs(Array.from(this.frogs.values()));
+    this.renderer.renderFoods(Array.from(this.foods.values()));
+    this.renderer.renderUI(this.gameState);
+  }
+  
+  private removeDestroyedFoods(): void {
+    for (const [id, food] of this.foods) {
+      if (food.currentHealth <= 0) {
+        this.gameState.money += food.stats.reward;
+        this.gameState.score += food.stats.reward;
+        this.foods.delete(id);
+      }
+    }
+  }
+  
+  private checkFoodsReachedEnd(): void {
+    for (const [id, food] of this.foods) {
+      // Check if food has completed all path segments
+      if (this.foodSystem.hasReachedEnd(food, this.currentLevel!.streams)) {
+        this.gameState.lives--;
+        this.foods.delete(id);
+        
+        if (this.gameState.lives <= 0) {
+          this.gameState.isGameOver = true;
+        }
+      }
+    }
+  }
+  
+  private handleCanvasClick(event: MouseEvent): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    const gridPos = this.pixelToGrid(x, y);
+    
+    if (gridPos && this.gameState.selectedFrogType) {
+      this.placeFrog(gridPos, this.gameState.selectedFrogType);
+    }
+  }
+  
+  private pixelToGrid(x: number, y: number): GridPosition | null {
+    const topMargin = 60;
+    const leftMargin = 60; // ADD THIS
+    const col = Math.floor((x - leftMargin) / GAME_CONFIG.cellSize); // SUBTRACT leftMargin
+    const row = Math.floor((y - topMargin) / GAME_CONFIG.cellSize);
+    
+    if (row >= 0 && row < GAME_CONFIG.gridRows && col >= 0 && col < GAME_CONFIG.gridCols) {
+      return { row, col };
+    }
+    
+    return null;
+  }
+  
+  placeFrog(gridPos: GridPosition, frogType: FrogType): boolean {
+    const cell = this.grid[gridPos.row][gridPos.col];
+    
+    // Check if placement is valid
+    if (cell.type !== CellType.LILYPAD || cell.frog !== null) {
+      return false;
+    }
+    
+    // Check if player has enough money
+    const frogData = this.frogSystem.createFrog(frogType, gridPos);
+    if (this.gameState.money < frogData.stats.cost) {
+      return false;
+    }
+    
+    // Place frog
+    this.gameState.money -= frogData.stats.cost;
+    cell.frog = frogData;
+    this.frogs.set(frogData.id, frogData);
+    
+    return true;
+  }
+  
+  selectFrogType(frogType: FrogType | null): void {
+    this.gameState.selectedFrogType = frogType;
+  }
+  
+  getGameState(): GameState {
+    return { ...this.gameState };
+  }
+  
+  destroy(): void {
+    this.stop();
+    this.canvas.removeEventListener('click', this.handleCanvasClick);
+  }
+}
