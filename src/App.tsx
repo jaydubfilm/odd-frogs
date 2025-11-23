@@ -65,7 +65,7 @@ function App() {
             🐸 OddFrogs 🐸
           </h1>
           <p className="text-xl text-white/90">
-            Defend the pond from hungry invaders!
+            Fatten the frogs!  Fast!!
           </p>
         </div>
 

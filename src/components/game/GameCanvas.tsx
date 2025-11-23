@@ -22,6 +22,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const gameEngineRef = useRef<GameEngine | null>(null);
   const initializationRef = useRef(false);
   const upgradeSystemRef = useRef(new UpgradeSystem());
+  const frogsBeforeClickRef = useRef<Map<string, FrogData>>(new Map());
 
   const [hoveredFrog, setHoveredFrog] = useState<FrogData | null>(null);
   const [upgradeMenuPosition, setUpgradeMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -79,19 +80,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return () => clearInterval(interval);
   }, [onGameStateChange, onWaveInfoChange]);
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
+  const handleCanvasClickCapture = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const gameEngine = gameEngineRef.current;
-    if (!canvas || !gameEngine) return;
+    if (!gameEngine) return;
 
-    // Close menu if clicking elsewhere
-    if (hoveredFrog) {
-      setHoveredFrog(null);
-      setUpgradeMenuPosition(null);
-    }
+    // Capture frogs BEFORE GameEngine's handler processes the click
+    frogsBeforeClickRef.current = new Map(gameEngine.getFrogs());
   };
 
-  const handleFrogClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     const gameEngine = gameEngineRef.current;
     if (!canvas || !gameEngine) return;
@@ -100,17 +97,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Get frogs from game engine
-    const frogsMap = gameEngine.getFrogs();
-    const frogsArray = Array.from(frogsMap.values()) as FrogData[];
+    const frogsArrayBefore = Array.from(frogsBeforeClickRef.current.values()) as FrogData[];
 
     // Account for canvas margins
     const topMargin = 60;
     const leftMargin = 60;
 
-    // Check if clicking on an EXISTING frog
+    // Check if clicking on an EXISTING frog (that was there BEFORE the click)
     let foundFrog: FrogData | null = null;
-    for (const frog of frogsArray) {
+    for (const frog of frogsArrayBefore) {
       const frogPos = {
         x: frog.gridPosition.col * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + leftMargin,
         y: frog.gridPosition.row * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + topMargin,
@@ -125,13 +120,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (foundFrog) {
       // Clicked on existing frog - show upgrade menu
       setHoveredFrog(foundFrog);
-      // Position menu at canvas-relative coordinates where the frog is
       const frogCanvasX = foundFrog.gridPosition.col * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + leftMargin;
       const frogCanvasY = foundFrog.gridPosition.row * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + topMargin;
       setUpgradeMenuPosition({ x: frogCanvasX, y: frogCanvasY });
-
-      // Prevent the click from reaching GameEngine's click handler
-      e.stopPropagation();
+    } else {
+      // Clicked elsewhere - close menu if open
+      if (hoveredFrog) {
+        setHoveredFrog(null);
+        setUpgradeMenuPosition(null);
+      }
     }
   };
 
@@ -173,7 +170,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ref={canvasRef}
         width={600}
         height={660}
-        onClickCapture={handleFrogClick}
+        onClickCapture={handleCanvasClickCapture}
         onClick={handleCanvasClick}
         onContextMenu={handleContextMenu}
         style={{
