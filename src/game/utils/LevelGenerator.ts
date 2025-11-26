@@ -79,15 +79,14 @@ function generateNonOverlappingStreams(numStreams: number): StreamPath[] {
     const elements = channelsToSegments(channels);
     const segments = elements.filter((el): el is PathSegment => 'start' in el);
     const smoothPath = PathGenerator.generateSmoothPath(segments, offsetDistance);
- 
 
     return {
-      id: `stream-${index + 1}`,
+      id: `stream-${index}`,
       channels,
       channelSections,
       laneSections,
-      offset: (index - (numStreams - 1) / 2) * 3,
-      smoothPath,  // ← ADD THIS LINE
+      offset: offsetDistance,
+      smoothPath,
     };
   });
 }

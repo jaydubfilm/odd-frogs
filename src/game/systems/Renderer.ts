@@ -1,4 +1,4 @@
-﻿import { GridCell, FrogData, FoodData, GameState, StreamPath, CellType, GridPosition } from '../../types/game';
+﻿import { GridCell, FrogData, FoodData, FoodType, FloatingText, GameState, StreamPath, CellType, GridPosition } from '../../types/game';
 import { COLORS, GAME_CONFIG } from '@data/constants';
 
 export class Renderer {
@@ -216,8 +216,10 @@ export class Renderer {
   }
 
   private renderFood(food: FoodData): void {
-    const { position, type } = food;
-    const size = 30;
+    const { position, type, stats } = food;
+    const baseSize = 30;
+    const sizeMultiplier = this.getFoodSizeMultiplier(type);
+    const size = baseSize * sizeMultiplier;
 
     let color = '#FFA500';
     switch (type) {
@@ -236,6 +238,12 @@ export class Renderer {
       case 'PIZZA':
         color = '#FF6347';
         break;
+      case 'DONUT':
+        color = '#D2691E';
+        break;
+      case 'CHERRY':
+        color = '#DC143C';
+        break;
     }
 
     this.ctx.fillStyle = color;
@@ -243,9 +251,28 @@ export class Renderer {
     this.ctx.arc(position.x, position.y, size / 2, 0, Math.PI * 2);
     this.ctx.fill();
 
+    // Special rendering for DONUT (add a hole)
+    if (type === 'DONUT') {
+      this.ctx.fillStyle = '#87CEEB';
+      this.ctx.beginPath();
+      this.ctx.arc(position.x, position.y, size / 4, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
     this.ctx.strokeStyle = '#000';
     this.ctx.lineWidth = 2;
     this.ctx.stroke();
+  }
+
+  private getFoodSizeMultiplier(type: FoodType): number {
+    switch (type) {
+      case 'DONUT':
+        return 1.5;  // 50% bigger
+      case 'CHERRY':
+        return 0.6;  // 40% smaller
+      default:
+        return 1.0;
+    }
   }
 
   private renderHealthBar(food: FoodData): void {
@@ -385,6 +412,22 @@ export class Renderer {
       this.ctx.font = 'bold 20px Arial';
       this.ctx.fillText('RESTART', GAME_CONFIG.canvasWidth / 2, buttonY + 26);
     }
+  }
+
+  renderFloatingTexts(texts: FloatingText[]): void {
+    this.ctx.font = 'bold 16px Arial';
+    this.ctx.textAlign = 'center';
+
+    texts.forEach(text => {
+      this.ctx.save();
+      this.ctx.globalAlpha = text.opacity;
+      this.ctx.fillStyle = '#FFD700';
+      this.ctx.strokeStyle = '#000';
+      this.ctx.lineWidth = 3;
+      this.ctx.strokeText(text.text, text.x, text.y);
+      this.ctx.fillText(text.text, text.x, text.y);
+      this.ctx.restore();
+    });
   }
 
   private renderLilyRemovalTooltip(

@@ -54,37 +54,14 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
   },
 };
 
-export const FOOD_BASE_STATS: Record<FoodType, FoodStats> = {
-  [FoodType.CAKE]: {
-    health: 30,
-    maxHealth: 30,
-    speed: 30,
-    reward: 15,
-  },
-  [FoodType.APPLE]: {
-    health: 10,
-    maxHealth: 10,
-    speed: 40,
-    reward: 5,
-  },
-  [FoodType.BEANS]: {
-    health: 50,
-    maxHealth: 50,
-    speed: 35,
-    reward: 25,
-  },
-  [FoodType.BURGER]: {
-    health: 20,
-    maxHealth: 20,
-    speed: 60,
-    reward: 10,
-  },
-  [FoodType.PIZZA]: {
-    health: 40,
-    maxHealth: 40,
-    speed: 25,
-    reward: 20,
-  },
+export const FOOD_STATS: Record<FoodType, { health: number; maxHealth: number; speed: number; reward: number; size?: number }> = {
+  [FoodType.CAKE]: { health: 150, maxHealth: 150, speed: 30, reward: 15 },
+  [FoodType.APPLE]: { health: 90, maxHealth: 90, speed: 40, reward: 10 },
+  [FoodType.BEANS]: { health: 120, maxHealth: 120, speed: 35, reward: 12 },
+  [FoodType.BURGER]: { health: 180, maxHealth: 180, speed: 25, reward: 20 },
+  [FoodType.PIZZA]: { health: 210, maxHealth: 210, speed: 20, reward: 25 },
+  [FoodType.DONUT]: { health: 360, maxHealth: 360, speed: 15, reward: 40, size: 1.5 },
+  [FoodType.CHERRY]: { health: 60, maxHealth: 60, speed: 80, reward: 15, size: 0.6 },
 };
 
 export const COLORS = {

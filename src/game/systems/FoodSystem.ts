@@ -1,12 +1,12 @@
 ﻿import { FoodData, FoodType, StreamPath } from '../../types/game';
-import { FOOD_BASE_STATS } from '@data/constants';
+import { FOOD_STATS } from '@data/constants';
 import { PathGenerator } from '../utils/PathGenerator'; 
 
 export class FoodSystem {
   private foodIdCounter = 0;
   
   createFood(type: FoodType, streamId: string): FoodData {
-    const baseStats = { ...FOOD_BASE_STATS[type] };
+    const baseStats = { ...FOOD_STATS[type] };
 
     return {
       id: `food-${this.foodIdCounter++}`,

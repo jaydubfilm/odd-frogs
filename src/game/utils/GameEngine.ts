@@ -7,14 +7,15 @@
   GridPosition,
   FrogType,
   CellType,
-} from '../types/game';
+} from '../../types/game';
 import { GAME_CONFIG } from '@data/constants';
-import { Renderer } from './systems/Renderer';
-import { FrogSystem } from './systems/FrogSystem';
-import { FoodSystem } from './systems/FoodSystem';
-import { CollisionSystem } from './systems/CollisionSystem';
-import { WaveSystem } from './systems/WaveSystem';
-import { AudioManager } from './systems/AudioManager';
+import { Renderer } from './../systems/Renderer';
+import { FrogSystem } from './../systems/FrogSystem';
+import { FoodSystem } from './../systems/FoodSystem';
+import { CollisionSystem } from './../systems/CollisionSystem';
+import { WaveSystem } from './../systems/WaveSystem';
+import { AudioManager } from './../systems/AudioManager';
+import { FloatingTextSystem } from './../systems/FloatingTextSystem';
 
 
 export class GameEngine {
@@ -33,6 +34,7 @@ export class GameEngine {
   private audioManager: AudioManager;
   private frogSystem: FrogSystem;
   private foodSystem: FoodSystem;
+  private floatingTextSystem: FloatingTextSystem;
   private collisionSystem: CollisionSystem;
   private waveSystem: WaveSystem;
   
@@ -68,6 +70,7 @@ export class GameEngine {
     this.audioManager = new AudioManager();
     this.audioManager.loadSound('slurp', '/sounds/shortlick.m4a');
     this.frogSystem = new FrogSystem(this.audioManager);
+    this.floatingTextSystem = new FloatingTextSystem();
     this.foodSystem = new FoodSystem();
     this.collisionSystem = new CollisionSystem();
     this.waveSystem = new WaveSystem(this.foodSystem);
@@ -257,6 +260,9 @@ export class GameEngine {
     // Remove destroyed foods and award money
     this.removeDestroyedFoods();
 
+    // Update floating texts
+    this.floatingTextSystem.update(deltaTime * 1000); // Convert to ms
+
     // Check for foods that reached the end
     this.checkFoodsReachedEnd();
   }
@@ -271,6 +277,7 @@ export class GameEngine {
     this.renderer.renderGrid(this.grid, this.hoveredCell, this.gameState.money); 
     this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
     this.renderer.renderFoods(Array.from(this.foods.values()));
+    this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
     this.renderer.renderUI(
       this.gameState,
       this.waveSystem,
@@ -282,6 +289,7 @@ export class GameEngine {
   private removeDestroyedFoods(): void {
     for (const [id, food] of this.foods) {
       if (food.currentHealth <= 0) {
+        this.floatingTextSystem.add(food.position.x, food.position.y, food.stats.reward);
         this.gameState.money += food.stats.reward;
         this.gameState.score += food.stats.reward;
         this.foods.delete(id);

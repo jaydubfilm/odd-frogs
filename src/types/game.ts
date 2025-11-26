@@ -35,6 +35,8 @@ export enum FoodType {
   BEANS = 'BEANS',
   BURGER = 'BURGER',
   PIZZA = 'PIZZA',
+  DONUT = 'DONUT',   // Tough, slow, big
+  CHERRY = 'CHERRY',  // Fast, small
 }
 
 export enum StreamDirection {
@@ -85,6 +87,16 @@ export interface FoodStats {
   maxHealth: number;
   speed: number; // pixels per second
   reward: number; // money earned when destroyed
+}
+
+export interface FloatingText {
+  x: number;
+  y: number;
+  text: string;
+  opacity: number;
+  velocity: number;
+  createdAt: number;
+  duration: number;
 }
 
 export interface FoodData {

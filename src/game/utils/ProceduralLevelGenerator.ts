@@ -34,7 +34,18 @@ export class ProceduralLevelGenerator {
   }
 
   private generateWave(waveNumber: number, levelNumber: number): WaveData {
-    const allFoodTypes = [FoodType.APPLE, FoodType.BEANS, FoodType.BURGER, FoodType.CAKE, FoodType.PIZZA];
+    const basicFoodTypes = [FoodType.APPLE, FoodType.BEANS, FoodType.BURGER, FoodType.CAKE, FoodType.PIZZA];
+    const allFoodTypes = [...basicFoodTypes];
+
+    // Add tough enemies starting at level 5
+    if (levelNumber >= 5) {
+      allFoodTypes.push(FoodType.DONUT);
+    }
+
+    // Add fast enemies starting at level 3
+    if (levelNumber >= 3) {
+      allFoodTypes.push(FoodType.CHERRY);
+    }
 
     // Difficulty scaling
     const enemiesPerWave = 5 + waveNumber * 2 + levelNumber * 2;

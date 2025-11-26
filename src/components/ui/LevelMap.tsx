@@ -4,9 +4,10 @@ import { LevelProgress } from '../../types/game';
 interface LevelMapProps {
   progress: LevelProgress[];
   onSelectLevel: (levelNumber: number) => void;
+  onUnlockAll?: () => void;  // ADD THIS
 }
 
-export function LevelMap({ progress, onSelectLevel }: LevelMapProps) {
+export function LevelMap({ progress, onSelectLevel, onUnlockAll }: LevelMapProps) {
   // --- CONFIGURATION ---
   // We use a fixed logical width for calculations. 
   // The CSS will scale this to fit the phone screen automatically.
@@ -61,7 +62,14 @@ export function LevelMap({ progress, onSelectLevel }: LevelMapProps) {
   // Auto-scroll to unlocked level
   useEffect(() => {
     if (scrollContainerRef.current) {
-      const currentLevelIndex = progress.findLastIndex(p => p.unlocked) || 0;
+      // Find the last unlocked level (ES5 compatible)
+      let currentLevelIndex = 0;
+      for (let i = progress.length - 1; i >= 0; i--) {
+        if (progress[i].unlocked) {
+          currentLevelIndex = i;
+          break;
+        }
+      }
       const pos = getNodePosition(currentLevelIndex);
 
       // Center the camera on the node
@@ -100,8 +108,19 @@ export function LevelMap({ progress, onSelectLevel }: LevelMapProps) {
           {/* 1. TITLE (Floating in the game world) */}
           <div className="absolute top-20 left-0 w-full text-center z-20 pointer-events-none">
             <h1 className="text-4xl font-black text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] tracking-wider">
-              FROG SAGA
+              RIO RIBBIT
             </h1>
+
+            {/* Dev Unlock All Button */}
+            {onUnlockAll && (
+              <button
+                onClick={onUnlockAll}
+                className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs 
+                           font-bold rounded shadow-lg pointer-events-auto transition-colors"
+              >
+                🔓 DEV: Unlock All
+              </button>
+            )}
           </div>
 
           {/* 2. THE RIVER LAYER (SVG) */}

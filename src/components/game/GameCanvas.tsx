@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from 'react';
-import { GameEngine } from '@game/GameEngine';
+import { GameEngine } from '../../game/utils/GameEngine';
 import { LevelData, GameState, FrogType, FrogData } from '../../types/game';
 import { RadialUpgradeMenu } from './RadialUpgradeMenu';
 import { UpgradeSystem } from '../../game/systems/UpgradeSystem';

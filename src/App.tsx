@@ -115,6 +115,16 @@ function App() {
     return 1;
   };
 
+  const handleUnlockAll = useCallback(() => {
+    console.log('🔓 DEV: Unlocking all levels');
+    setLevelProgress(prev =>
+      prev.map(level => ({
+        ...level,
+        unlocked: true,
+      }))
+    );
+  }, []);
+
   const handleBackToMap = useCallback(() => {
     // If returning from a victory, mark level as complete
     if (gameState.isVictory) {
@@ -167,6 +177,7 @@ function App() {
         <LevelMap
           progress={levelProgress}
           onSelectLevel={handleSelectLevel}
+          onUnlockAll={handleUnlockAll}
         />
       ) : (
         <div className="container mx-auto px-4 py-8">
