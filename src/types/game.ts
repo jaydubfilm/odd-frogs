@@ -45,6 +45,12 @@ export enum StreamDirection {
   DOWN = 'DOWN',
 }
 
+export enum FirePattern {
+  STRAIGHT_UP = 'STRAIGHT_UP',
+  LEFT_RIGHT = 'LEFT_RIGHT',
+  OMNI = 'OMNI'
+}
+
 export interface WaveData {
   waveNumber: number;
   duration: number;  // ← ADD THIS: seconds until next wave auto-starts
@@ -63,6 +69,7 @@ export interface FrogStats {
   cost: number;
   upgradeCost: number;
   color: string;
+  firePattern: FirePattern;
 }
 
 export interface FrogData {

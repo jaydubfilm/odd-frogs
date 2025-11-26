@@ -1,4 +1,4 @@
-﻿import { FrogData, FrogType, GridPosition, FoodData, GridCell } from '../../types/game';
+﻿import { FrogData, FrogType, FirePattern, GridPosition, FoodData, GridCell } from '../../types/game';
 import { FROG_STATS, GAME_CONFIG, UPGRADE_MULTIPLIER } from '@data/constants';
 import { AudioManager } from './AudioManager';
 import { createDefaultUpgradeTree } from '../../data/UpgradeTrees';  
@@ -35,13 +35,19 @@ export class FrogSystem {
     foods: Map<string, FoodData>,
     grid: GridCell[][]
   ): FoodData | null {
-    const frogPos = this.getGridCellPosition(frog.gridPosition);
-    if (!frogPos) return null;
+    const cell = grid[frog.gridPosition.row]?.[frog.gridPosition.col];
+    if (!cell) return null;
+    const frogPos = cell.position;
 
     let priorityFood: FoodData | null = null;
     let maxDistanceTraveled = -1;
 
     foods.forEach(food => {
+      // Check fire pattern restrictions
+      if (!this.canTargetWithFirePattern(frogPos, food.position, frog.stats.firePattern)) {
+        return;
+      }
+
       // Check if line of sight is blocked by rocks
       if (this.isLineOfSightBlocked(frogPos, food.position, grid)) {
         return;
@@ -61,6 +67,40 @@ export class FrogSystem {
     });
 
     return priorityFood;
+  }
+
+  private canTargetWithFirePattern(
+    frogPos: { x: number; y: number },
+    foodPos: { x: number; y: number },
+    firePattern: FirePattern
+  ): boolean {
+    if (firePattern === FirePattern.OMNI) return true;
+
+    const dx = foodPos.x - frogPos.x;
+    const dy = foodPos.y - frogPos.y;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    // Cone width (total 20 degrees, so +/- 10)
+    const t = 10;
+
+    if (firePattern === FirePattern.STRAIGHT_UP) {
+      // Up is -90. Check between -100 and -80
+      return angle >= (-90 - t) && angle <= (-90 + t);
+    }
+
+    if (firePattern === FirePattern.LEFT_RIGHT) {
+      // 1. Check RIGHT (0 degrees)
+      const right = angle >= -t && angle <= t;
+
+      // 2. Check LEFT (180 degrees)
+      // We use Math.abs because left is the wrap-around point (-180/180)
+      // This checks if angle is > 170 OR < -170
+      const left = Math.abs(angle) >= (180 - t);
+
+      return right || left;
+    }
+
+    return false;
   }
   
   private isLineOfSightBlocked(
@@ -122,30 +162,17 @@ export class FrogSystem {
     return true;
   }
   
-  private getGridCellPosition(gridPos: GridPosition): { x: number; y: number } | null {
-    if (
-      gridPos.row < 0 ||
-      gridPos.row >= GAME_CONFIG.gridRows ||
-      gridPos.col < 0 ||
-      gridPos.col >= GAME_CONFIG.gridCols
-    ) {
-      return null;
-    }
-    
-    return {
-      x: gridPos.col * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2,
-      y: gridPos.row * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2,
-    };
-  }
-  
   private pixelToGrid(x: number, y: number): GridPosition | null {
-    const col = Math.floor(x / GAME_CONFIG.cellSize);
-    const row = Math.floor(y / GAME_CONFIG.cellSize);
-    
+    const topMargin = 60;
+    const leftMargin = 60;
+
+    const col = Math.floor((x - leftMargin) / GAME_CONFIG.cellSize);
+    const row = Math.floor((y - topMargin) / GAME_CONFIG.cellSize);
+
     if (row >= 0 && row < GAME_CONFIG.gridRows && col >= 0 && col < GAME_CONFIG.gridCols) {
       return { row, col };
     }
-    
+
     return null;
   }
   

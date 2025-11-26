@@ -1,4 +1,4 @@
-import { FrogType, FrogStats, FoodType, FoodStats, GameConfig } from '../types/game';
+import { FrogType, FrogStats, FoodType, FirePattern, FoodStats, GameConfig } from '../types/game';
 
 
 export const GAME_CONFIG: GameConfig = {
@@ -15,10 +15,11 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
   [FrogType.RED]: {
     damage: 10,
     attackSpeed: 1.5,
-    range: 1.5,
+    range: 999,
     cost: 100,
     upgradeCost: 150,
     color: '#E74C3C',
+    firePattern: FirePattern.LEFT_RIGHT,
   },
   [FrogType.BLUE]: {
     damage: 5,
@@ -27,14 +28,16 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     cost: 120,
     upgradeCost: 180,
     color: '#3498DB',
+    firePattern: FirePattern.OMNI,
   },
   [FrogType.GREEN]: {
     damage: 15,
-    attackSpeed: 0.8,
-    range: 1,
+    attackSpeed: 3,
+    range: 999,
     cost: 150,
     upgradeCost: 200,
     color: '#2ECC71',
+    firePattern: FirePattern.STRAIGHT_UP,
   },
   [FrogType.YELLOW]: {
     damage: 8,
@@ -43,6 +46,7 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     cost: 180,
     upgradeCost: 250,
     color: '#F39C12',
+    firePattern: FirePattern.OMNI,
   },
   [FrogType.PURPLE]: {
     damage: 20,
@@ -51,6 +55,7 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     cost: 200,
     upgradeCost: 300,
     color: '#9B59B6',
+    firePattern: FirePattern.OMNI,
   },
 };
 
