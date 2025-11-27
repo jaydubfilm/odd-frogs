@@ -62,6 +62,7 @@ export class GameEngine {
       currentLevel: 1,
       selectedFrogType: null,
       selectedGridCell: null,
+      selectedFrog: null,
       gameSpeed: 1,
     };
     
@@ -278,6 +279,7 @@ export class GameEngine {
       this.renderer.renderStreams(this.currentLevel.streams);
       this.renderer.renderGrid(this.grid, this.hoveredCell, this.gameState.money);
       this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
+      this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money);
       this.renderer.renderFoods(Array.from(this.foods.values()));
       this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
     }
@@ -320,6 +322,8 @@ export class GameEngine {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
+    console.log('Click detected at', x, y, 'selectedFrogType:', this.gameState.selectedFrogType);
+
     // Check for restart button click if game is over OR victory
     if (this.gameState.isGameOver || this.gameState.isVictory) {
       const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
@@ -334,26 +338,38 @@ export class GameEngine {
       }
     }
 
-    // Check for speed button click (top right)
-    const speedButtonX = GAME_CONFIG.canvasWidth - 160;
-    const speedButtonY = 10;
-    const speedButtonWidth = 70;
-    const speedButtonHeight = 35;
+    // Check for resume button click if paused
+    if (this.gameState.isPaused && !this.gameState.isGameOver && !this.gameState.isVictory) {
+      const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
+      const buttonY = GAME_CONFIG.canvasHeight / 2 + 20;
+      const buttonWidth = 150;
+      const buttonHeight = 50;
 
-    if (x >= speedButtonX && x <= speedButtonX + speedButtonWidth &&
-      y >= speedButtonY && y <= speedButtonY + speedButtonHeight) {
+      if (x >= buttonX && x <= buttonX + buttonWidth &&
+        y >= buttonY && y <= buttonY + buttonHeight) {
+        this.resume();
+        return;
+      }
+      return; // Don't process other clicks when paused
+    }
+
+    // Check for speed button click (top right)
+    const buttonSize = 40;
+    const speedButtonX = GAME_CONFIG.canvasWidth - 90;
+    const speedButtonY = 10;
+
+    if (x >= speedButtonX && x <= speedButtonX + buttonSize &&
+      y >= speedButtonY && y <= speedButtonY + buttonSize) {
       this.toggleSpeed();
       return;
     }
 
     // Check for pause button click (top right, next to speed)
-    const pauseButtonX = GAME_CONFIG.canvasWidth - 80;
+    const pauseButtonX = GAME_CONFIG.canvasWidth - 45;
     const pauseButtonY = 10;
-    const pauseButtonWidth = 70;
-    const pauseButtonHeight = 35;
 
-    if (x >= pauseButtonX && x <= pauseButtonX + pauseButtonWidth &&
-      y >= pauseButtonY && y <= pauseButtonY + pauseButtonHeight) {
+    if (x >= pauseButtonX && x <= pauseButtonX + buttonSize &&
+      y >= pauseButtonY && y <= pauseButtonY + buttonSize) {
       this.togglePause();
       return;
     }
@@ -373,24 +389,67 @@ export class GameEngine {
       }
     }
 
-    const gridPos = this.pixelToGrid(x, y);
+    // Check for upgrade/sell button clicks if frog is selected
+    if (this.gameState.selectedFrog && !this.gameState.selectedFrogType) {
+      const frog = this.frogs.get(this.gameState.selectedFrog);
+      if (frog) {
+        const cell = this.grid[frog.gridPosition.row][frog.gridPosition.col];
+        const frogPos = cell.position;
 
+        // Upgrade button (left button)
+        const upgradeButtonX = frogPos.x - 45;
+        const upgradeButtonY = frogPos.y + 35;
+        const buttonSize = 35;
+
+        if (x >= upgradeButtonX && x <= upgradeButtonX + buttonSize &&
+          y >= upgradeButtonY && y <= upgradeButtonY + buttonSize) {
+          this.upgradeFrog(frog.id);
+          return;
+        }
+
+        // Sell button (centered if max level, right if not)
+        const sellButtonX = frog.level >= 3 ? frogPos.x - buttonSize / 2 : frogPos.x + 10;
+        const sellButtonY = frogPos.y + 35;
+
+        if (x >= sellButtonX && x <= sellButtonX + buttonSize &&
+          y >= sellButtonY && y <= sellButtonY + buttonSize) {
+          this.sellFrog(frog.id);
+          this.gameState.selectedFrog = null;
+          return;
+        }
+      }
+    }
+
+    const gridPos = this.pixelToGrid(x, y);
 
     if (gridPos) {
       const cell = this.grid[gridPos.row][gridPos.col];
 
-      // Check if clicking on a lily pad with lily (make entire cell clickable)
+      // Check if clicking on a lily pad with lily
       if (cell.type === CellType.LILYPAD_WITH_LILY &&
-        !this.gameState.selectedFrogType) {  // ← Only if not placing a frog
+        !this.gameState.selectedFrogType) {
         console.log('Lily removal clicked!');
         this.removeLily(gridPos);
         return;
       }
 
-      // Normal frog placement
+      // Normal frog placement (check first)
       if (this.gameState.selectedFrogType) {
-        this.placeFrog(gridPos, this.gameState.selectedFrogType);
+        const success = this.placeFrog(gridPos, this.gameState.selectedFrogType);
+        if (success) {
+          this.gameState.selectedFrogType = null;
+        }
+        return;
       }
+
+      // Check if clicking on a frog to select it
+      if (cell.frog) {
+        this.gameState.selectedFrog = cell.frog.id;
+        return;
+      }
+
+      // Deselect frog if clicking elsewhere
+      this.gameState.selectedFrog = null;
     }
   }
 
@@ -430,6 +489,7 @@ export class GameEngine {
   }
   
   placeFrog(gridPos: GridPosition, frogType: FrogType): boolean {
+    console.log('placeFrog called', gridPos, frogType);
     const cell = this.grid[gridPos.row][gridPos.col];
     
     // Check if placement is valid
@@ -451,12 +511,29 @@ export class GameEngine {
     return true;
   }
 
+  upgradeFrog(frogId: string): boolean {
+    const frog = this.frogs.get(frogId);
+    if (!frog) return false;
+
+    // Max level is 3
+    if (frog.level >= 3) return false;
+
+    const upgradeCost = frog.stats.upgradeCost;
+    if (this.gameState.money < upgradeCost) return false;
+
+    this.gameState.money -= upgradeCost;
+    frog.totalSpent += upgradeCost;
+    this.frogSystem.upgradeFrog(frog);
+
+    return true;
+  }
+
   sellFrog(frogId: string): number {
     const frog = this.frogs.get(frogId);
     if (!frog) return 0;
 
     // Calculate sell value: half of (original cost + upgrades)
-    const sellValue = Math.floor((frog.stats.cost + frog.upgradeState.totalSpent) / 2);
+    const sellValue = Math.floor((frog.stats.cost + frog.totalSpent) / 2);
 
     // Remove frog from grid
     const cell = this.grid[frog.gridPosition.row][frog.gridPosition.col];
@@ -483,6 +560,7 @@ export class GameEngine {
 
   selectFrogType(frogType: FrogType | null): void {
     this.gameState.selectedFrogType = frogType;
+    this.gameState.selectedFrog = null; // Clear any selected frog
   }
   
   getGameState(): GameState {

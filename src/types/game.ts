@@ -45,6 +45,13 @@ export enum StreamDirection {
   DOWN = 'DOWN',
 }
 
+export interface TongueState {
+  active: boolean;
+  targetPosition: { x: number; y: number };
+  progress: number;
+  startTime: number;
+}
+
 export enum FirePattern {
   STRAIGHT_UP = 'STRAIGHT_UP',
   LEFT_RIGHT = 'LEFT_RIGHT',
@@ -80,13 +87,8 @@ export interface FrogData {
   stats: FrogStats;
   lastAttackTime: number;
   targetFood: string | null;
-  upgradeState: FrogUpgradeState;  
-  tongue?: {
-    active: boolean;
-    targetPosition: Position;
-    progress: number;
-    startTime: number;
-  };
+  tongue?: TongueState;
+  totalSpent: number; // Track money spent for sell value
 }
 
 export interface FoodStats {
@@ -155,6 +157,7 @@ export interface GameState {
   currentLevel: number;      
   selectedFrogType: FrogType | null;
   selectedGridCell: GridPosition | null;
+  selectedFrog: string | null;
   gameSpeed: number;
 }
 

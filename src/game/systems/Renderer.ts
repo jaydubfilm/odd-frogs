@@ -138,6 +138,91 @@ export class Renderer {
     });
   }
 
+  renderFrogUpgradeUI(selectedFrogId: string | null, frogs: Map<string, FrogData>, grid: GridCell[][], money: number): void {
+    if (!selectedFrogId) return;
+
+    const frog = frogs.get(selectedFrogId);
+    if (!frog) return;
+
+    const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
+    const pos = cell.position;
+    const buttonSize = 35;
+    const buttonY = pos.y + 35;
+    const isMaxLevel = frog.level >= 3;
+    const sellValue = Math.floor((frog.stats.cost + frog.totalSpent) / 2);
+
+    if (isMaxLevel) {
+      // Only show sell button, centered
+      const sellButtonX = pos.x - buttonSize / 2;
+
+      this.ctx.fillStyle = '#E74C3C';
+      this.ctx.fillRect(sellButtonX, buttonY, buttonSize, buttonSize);
+
+      this.ctx.strokeStyle = '#C0392B';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(sellButtonX, buttonY, buttonSize, buttonSize);
+
+      // Dollar sign
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 20px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText('$', sellButtonX + buttonSize / 2, buttonY + buttonSize / 2 - 2);
+
+      // Sell value text
+      this.ctx.font = 'bold 10px Arial';
+      this.ctx.textBaseline = 'alphabetic';
+      this.ctx.fillText(`$${sellValue}`, sellButtonX + buttonSize / 2, buttonY + 30);
+    } else {
+      // Show both upgrade and sell buttons
+      // Upgrade button (left)
+      const upgradeButtonX = pos.x - 45;
+      const canUpgrade = money >= frog.stats.upgradeCost;
+
+      this.ctx.fillStyle = canUpgrade ? '#4CAF50' : '#888';
+      this.ctx.fillRect(upgradeButtonX, buttonY, buttonSize, buttonSize);
+
+      this.ctx.strokeStyle = canUpgrade ? '#45a049' : '#666';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(upgradeButtonX, buttonY, buttonSize, buttonSize);
+
+      // Up arrow
+      this.ctx.fillStyle = 'white';
+      this.ctx.beginPath();
+      this.ctx.moveTo(upgradeButtonX + buttonSize / 2, buttonY + 8);
+      this.ctx.lineTo(upgradeButtonX + buttonSize / 2 - 8, buttonY + 18);
+      this.ctx.lineTo(upgradeButtonX + buttonSize / 2 + 8, buttonY + 18);
+      this.ctx.closePath();
+      this.ctx.fill();
+
+      // Cost text
+      this.ctx.font = 'bold 10px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(`$${frog.stats.upgradeCost}`, upgradeButtonX + buttonSize / 2, buttonY + 30);
+
+      // Sell button (right)
+      const sellButtonX = pos.x + 10;
+
+      this.ctx.fillStyle = '#E74C3C';
+      this.ctx.fillRect(sellButtonX, buttonY, buttonSize, buttonSize);
+
+      this.ctx.strokeStyle = '#C0392B';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(sellButtonX, buttonY, buttonSize, buttonSize);
+
+      // Dollar sign
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 20px Arial';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText('$', sellButtonX + buttonSize / 2, buttonY + buttonSize / 2 - 2);
+
+      // Sell value text
+      this.ctx.font = 'bold 10px Arial';
+      this.ctx.textBaseline = 'alphabetic';
+      this.ctx.fillText(`$${sellValue}`, sellButtonX + buttonSize / 2, buttonY + 30);
+    }
+  }
+
   private renderFrog(frog: FrogData, grid: GridCell[][]): void {
     const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
     const pos = cell.position;
@@ -328,20 +413,51 @@ export class Renderer {
       this.ctx.fillText(`(+$${bonus} bonus)`, buttonX + buttonWidth / 2, buttonY + 28);
     }
 
+    // Pause screen
+    if (gameState.isPaused && !gameState.isGameOver && !gameState.isVictory) {
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
+
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 48px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('PAUSED', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 - 30);
+
+      // Resume button
+      const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
+      const buttonY = GAME_CONFIG.canvasHeight / 2 + 20;
+      const buttonWidth = 150;
+      const buttonHeight = 50;
+
+      this.ctx.fillStyle = '#27AE60';
+      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+      this.ctx.strokeStyle = '#229954';
+      this.ctx.lineWidth = 3;
+      this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 24px Arial';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText('RESUME', GAME_CONFIG.canvasWidth / 2, buttonY + buttonHeight / 2);
+
+      return; // Don't render other UI elements
+    }
+
     // Speed and Pause buttons (top right)
     if (!gameState.isGameOver && !gameState.isVictory) {
+      const buttonSize = 40;
+      const buttonY = 10;
+
       // Speed button
-      const speedButtonX = GAME_CONFIG.canvasWidth - 160;
-      const speedButtonY = 10;
-      const buttonWidth = 70;
-      const buttonHeight = 35;
+      const speedButtonX = GAME_CONFIG.canvasWidth - 90;
 
       this.ctx.fillStyle = gameState.gameSpeed === 1 ? '#4A90E2' : '#FF6B35';
-      this.ctx.fillRect(speedButtonX, speedButtonY, buttonWidth, buttonHeight);
+      this.ctx.fillRect(speedButtonX, buttonY, buttonSize, buttonSize);
 
       this.ctx.strokeStyle = gameState.gameSpeed === 1 ? '#357ABD' : '#E85A2B';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(speedButtonX, speedButtonY, buttonWidth, buttonHeight);
+      this.ctx.strokeRect(speedButtonX, buttonY, buttonSize, buttonSize);
 
       this.ctx.fillStyle = 'white';
       this.ctx.font = 'bold 20px Arial';
@@ -349,28 +465,35 @@ export class Renderer {
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText(
         gameState.gameSpeed === 1 ? '1x' : '2x',
-        speedButtonX + buttonWidth / 2,
-        speedButtonY + buttonHeight / 2
+        speedButtonX + buttonSize / 2,
+        buttonY + buttonSize / 2
       );
 
       // Pause button
-      const pauseButtonX = GAME_CONFIG.canvasWidth - 80;
-      const pauseButtonY = 10;
+      const pauseButtonX = GAME_CONFIG.canvasWidth - 45;
 
       this.ctx.fillStyle = gameState.isPaused ? '#E74C3C' : '#27AE60';
-      this.ctx.fillRect(pauseButtonX, pauseButtonY, buttonWidth, buttonHeight);
+      this.ctx.fillRect(pauseButtonX, buttonY, buttonSize, buttonSize);
 
       this.ctx.strokeStyle = gameState.isPaused ? '#C0392B' : '#229954';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(pauseButtonX, pauseButtonY, buttonWidth, buttonHeight);
+      this.ctx.strokeRect(pauseButtonX, buttonY, buttonSize, buttonSize);
 
       this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 16px Arial';
-      this.ctx.fillText(
-        gameState.isPaused ? 'Resume' : 'Pause',
-        pauseButtonX + buttonWidth / 2,
-        pauseButtonY + buttonHeight / 2
-      );
+
+      if (gameState.isPaused) {
+        // Draw play triangle
+        this.ctx.beginPath();
+        this.ctx.moveTo(pauseButtonX + buttonSize / 2 - 6, buttonY + buttonSize / 2 - 8);
+        this.ctx.lineTo(pauseButtonX + buttonSize / 2 - 6, buttonY + buttonSize / 2 + 8);
+        this.ctx.lineTo(pauseButtonX + buttonSize / 2 + 8, buttonY + buttonSize / 2);
+        this.ctx.closePath();
+        this.ctx.fill();
+      } else {
+        // Draw pause bars
+        this.ctx.fillRect(pauseButtonX + buttonSize / 2 - 8, buttonY + buttonSize / 2 - 8, 5, 16);
+        this.ctx.fillRect(pauseButtonX + buttonSize / 2 + 3, buttonY + buttonSize / 2 - 8, 5, 16);
+      }
     }
 
     if (gameState.isVictory) {

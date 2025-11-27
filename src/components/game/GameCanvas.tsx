@@ -229,18 +229,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           height: '660px'
         }}
       />
-
-      {hoveredFrog && upgradeMenuPosition && (
-        <RadialUpgradeMenu
-          frog={hoveredFrog}
-          position={upgradeMenuPosition}
-          availableUpgrades={upgradeSystemRef.current.getAvailableUpgrades(hoveredFrog)}
-          playerMoney={gameEngineRef.current?.getGameState().money || 0}
-          onPurchase={handlePurchaseUpgrade}
-          onSell={handleSellFrog}
-          onClose={handleCloseMenu}
-        />
-      )}
     </div>
   );
 };

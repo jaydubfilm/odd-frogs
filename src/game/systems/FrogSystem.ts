@@ -1,7 +1,6 @@
 ﻿import { FrogData, FrogType, FirePattern, GridPosition, FoodData, GridCell } from '../../types/game';
 import { FROG_STATS, GAME_CONFIG, UPGRADE_MULTIPLIER } from '@data/constants';
-import { AudioManager } from './AudioManager';
-import { createDefaultUpgradeTree } from '../../data/UpgradeTrees';  
+import { AudioManager } from './AudioManager'; 
 
 export class FrogSystem {
   private frogIdCounter = 0;
@@ -22,10 +21,7 @@ export class FrogSystem {
       stats: baseStats,
       lastAttackTime: 0,
       targetFood: null,
-      upgradeState: {                       
-        tree: createDefaultUpgradeTree(),
-        totalSpent: 0,
-      },
+      totalSpent: 0,
     };
   }
  
@@ -149,17 +145,15 @@ export class FrogSystem {
       this.audioManager.playSound('slurp', 0.3);
     }
   }
-  
-  upgradeFrog(frog: FrogData): boolean {
+
+  upgradeFrog(frog: FrogData): void {
     frog.level++;
-    
+
     // Apply upgrade multipliers
     frog.stats.damage *= UPGRADE_MULTIPLIER.DAMAGE;
     frog.stats.attackSpeed *= UPGRADE_MULTIPLIER.ATTACK_SPEED;
     frog.stats.range *= UPGRADE_MULTIPLIER.RANGE;
     frog.stats.upgradeCost = Math.floor(frog.stats.upgradeCost * 1.5);
-    
-    return true;
   }
   
   private pixelToGrid(x: number, y: number): GridPosition | null {
