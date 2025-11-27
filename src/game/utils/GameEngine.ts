@@ -273,11 +273,15 @@ export class GameEngine {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this.renderer.renderBackground(this.ctx);
-    this.renderer.renderStreams(this.currentLevel.streams);
-    this.renderer.renderGrid(this.grid, this.hoveredCell, this.gameState.money); 
-    this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
-    this.renderer.renderFoods(Array.from(this.foods.values()));
-    this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
+
+    if (!this.gameState.isPaused) {
+      this.renderer.renderStreams(this.currentLevel.streams);
+      this.renderer.renderGrid(this.grid, this.hoveredCell, this.gameState.money);
+      this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
+      this.renderer.renderFoods(Array.from(this.foods.values()));
+      this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
+    }
+
     this.renderer.renderUI(
       this.gameState,
       this.waveSystem,
@@ -330,11 +334,11 @@ export class GameEngine {
       }
     }
 
-    // Check for speed button click (bottom right)
-    const speedButtonX = GAME_CONFIG.canvasWidth - 80;
-    const speedButtonY = GAME_CONFIG.canvasHeight - 50;
+    // Check for speed button click (top right)
+    const speedButtonX = GAME_CONFIG.canvasWidth - 160;
+    const speedButtonY = 10;
     const speedButtonWidth = 70;
-    const speedButtonHeight = 40;
+    const speedButtonHeight = 35;
 
     if (x >= speedButtonX && x <= speedButtonX + speedButtonWidth &&
       y >= speedButtonY && y <= speedButtonY + speedButtonHeight) {
@@ -342,11 +346,23 @@ export class GameEngine {
       return;
     }
 
-    // Check for "Call Next Wave" button click
+    // Check for pause button click (top right, next to speed)
+    const pauseButtonX = GAME_CONFIG.canvasWidth - 80;
+    const pauseButtonY = 10;
+    const pauseButtonWidth = 70;
+    const pauseButtonHeight = 35;
+
+    if (x >= pauseButtonX && x <= pauseButtonX + pauseButtonWidth &&
+      y >= pauseButtonY && y <= pauseButtonY + pauseButtonHeight) {
+      this.togglePause();
+      return;
+    }
+
+    // Check for "Call Next Wave" button click (under speed/pause)
     const currentTime = performance.now() / 1000;
     if (this.waveSystem.canCallNextWave(currentTime, this.foods)) {
       const buttonX = GAME_CONFIG.canvasWidth - 160;
-      const buttonY = 10;
+      const buttonY = 55;
       const buttonWidth = 150;
       const buttonHeight = 35;
 
@@ -486,6 +502,11 @@ export class GameEngine {
   toggleSpeed(): void {
     this.gameState.gameSpeed = this.gameState.gameSpeed === 1 ? 2 : 1;
     console.log(`Game speed: ${this.gameState.gameSpeed}x`);
+  }
+
+  togglePause(): void {
+    this.gameState.isPaused = !this.gameState.isPaused;
+    console.log(`Game ${this.gameState.isPaused ? 'paused' : 'resumed'}`);
   }
 
   getHoveredCell(): GridPosition | null {

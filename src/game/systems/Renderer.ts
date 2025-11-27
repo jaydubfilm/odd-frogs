@@ -305,7 +305,7 @@ export class Renderer {
     // Show "Call Next Wave" button (only if not last wave and not victory)
     if (waveSystem.canCallNextWave(currentTime, foods) && !gameState.isVictory && !isLastWave) {
       const buttonX = GAME_CONFIG.canvasWidth - 160;
-      const buttonY = 10;  // ← MOVED UP since no top bar now
+      const buttonY = 55;  // ← Below speed/pause buttons
       const buttonWidth = 150;
       const buttonHeight = 35;
 
@@ -328,28 +328,48 @@ export class Renderer {
       this.ctx.fillText(`(+$${bonus} bonus)`, buttonX + buttonWidth / 2, buttonY + 28);
     }
 
-    // Speed control button (bottom right)
+    // Speed and Pause buttons (top right)
     if (!gameState.isGameOver && !gameState.isVictory) {
-      const buttonX = GAME_CONFIG.canvasWidth - 80;
-      const buttonY = GAME_CONFIG.canvasHeight - 50;
+      // Speed button
+      const speedButtonX = GAME_CONFIG.canvasWidth - 160;
+      const speedButtonY = 10;
       const buttonWidth = 70;
-      const buttonHeight = 40;
+      const buttonHeight = 35;
 
       this.ctx.fillStyle = gameState.gameSpeed === 1 ? '#4A90E2' : '#FF6B35';
-      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+      this.ctx.fillRect(speedButtonX, speedButtonY, buttonWidth, buttonHeight);
 
       this.ctx.strokeStyle = gameState.gameSpeed === 1 ? '#357ABD' : '#E85A2B';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+      this.ctx.strokeRect(speedButtonX, speedButtonY, buttonWidth, buttonHeight);
 
       this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 24px Arial';
+      this.ctx.font = 'bold 20px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText(
         gameState.gameSpeed === 1 ? '1x' : '2x',
-        buttonX + buttonWidth / 2,
-        buttonY + buttonHeight / 2
+        speedButtonX + buttonWidth / 2,
+        speedButtonY + buttonHeight / 2
+      );
+
+      // Pause button
+      const pauseButtonX = GAME_CONFIG.canvasWidth - 80;
+      const pauseButtonY = 10;
+
+      this.ctx.fillStyle = gameState.isPaused ? '#E74C3C' : '#27AE60';
+      this.ctx.fillRect(pauseButtonX, pauseButtonY, buttonWidth, buttonHeight);
+
+      this.ctx.strokeStyle = gameState.isPaused ? '#C0392B' : '#229954';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(pauseButtonX, pauseButtonY, buttonWidth, buttonHeight);
+
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 16px Arial';
+      this.ctx.fillText(
+        gameState.isPaused ? 'Resume' : 'Pause',
+        pauseButtonX + buttonWidth / 2,
+        pauseButtonY + buttonHeight / 2
       );
     }
 
