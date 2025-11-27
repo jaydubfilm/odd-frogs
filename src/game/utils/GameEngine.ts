@@ -402,14 +402,14 @@ export class GameEngine {
   
   private pixelToGrid(x: number, y: number): GridPosition | null {
     const topMargin = 60;
-    const leftMargin = 60; // ADD THIS
-    const col = Math.floor((x - leftMargin) / GAME_CONFIG.cellSize); // SUBTRACT leftMargin
+    const leftMargin = 60;
+    const col = Math.floor((x - leftMargin) / GAME_CONFIG.cellSize);
     const row = Math.floor((y - topMargin) / GAME_CONFIG.cellSize);
-    
+
     if (row >= 0 && row < GAME_CONFIG.gridRows && col >= 0 && col < GAME_CONFIG.gridCols) {
       return { row, col };
     }
-    
+
     return null;
   }
   
