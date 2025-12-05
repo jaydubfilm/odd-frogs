@@ -7,14 +7,46 @@ interface GameStatsProps {
     total: number;
     timeUntilNext: number;
   };
+  compact?: boolean;
 }
 
-export const GameStats: React.FC<GameStatsProps> = ({ gameState, waveInfo }) => {
+export const GameStats = ({ gameState, waveInfo, compact = false }: GameStatsProps) => {
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  if (compact) {
+    return (
+      <div className="bg-white/90 rounded-lg p-2 shadow-lg">
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <div className="flex items-center gap-1">
+            <span className="text-gray-700 font-semibold">Lives:</span>
+            <div className="flex gap-0.5">
+              {Array.from({ length: gameState.lives }).map((_, i) => (
+                <div key={i} className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-xs">
+                  ❤️
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className="text-gray-700 font-semibold">$</span>
+            <span className="text-lg font-bold text-green-600">{gameState.money}</span>
+          </div>
+          <div>
+            <span className="text-gray-700 font-semibold">Wave:</span>
+            <span className="font-bold text-blue-600"> {waveInfo.current}/{waveInfo.total}</span>
+          </div>
+          <div>
+            <span className="text-gray-700 font-semibold">Score:</span>
+            <span className="font-bold text-purple-600"> {gameState.score}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white/90 rounded-lg p-4 shadow-lg">

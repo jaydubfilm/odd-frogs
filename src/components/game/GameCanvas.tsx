@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+﻿import { useRef, useEffect, useState, type MouseEvent } from 'react';
 import { GameEngine } from '../../game/utils/GameEngine';
 import { LevelData, GameState, FrogType, FrogData } from '../../types/game';
 import { RadialUpgradeMenu } from './RadialUpgradeMenu';
@@ -13,13 +13,13 @@ interface GameCanvasProps {
   onLevelComplete?: () => void;
 }
 
-export const GameCanvas: React.FC<GameCanvasProps> = ({
+export const GameCanvas = ({
   level,
   selectedFrogType,
   onGameStateChange,
   onWaveInfoChange,
   onLevelComplete
-}) => {
+}: GameCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameEngineRef = useRef<GameEngine | null>(null);
   const initializationRef = useRef(false);
@@ -112,7 +112,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   }, [currentGameState?.isVictory, onLevelComplete]);
 
-  const handleCanvasClickCapture = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleCanvasClickCapture = (e: MouseEvent<HTMLCanvasElement>) => {
     const gameEngine = gameEngineRef.current;
     if (!gameEngine) return;
 
@@ -120,14 +120,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     frogsBeforeClickRef.current = new Map(gameEngine.getFrogs());
   };
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleCanvasClick = (e: MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     const gameEngine = gameEngineRef.current;
     if (!canvas || !gameEngine) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Adjust for canvas scaling
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
     const frogsArrayBefore = Array.from(frogsBeforeClickRef.current.values()) as FrogData[];
 
@@ -164,7 +167,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleContextMenu = (e: MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault(); // Prevent default context menu
 
     // Close upgrade menu on right-click
@@ -215,18 +218,25 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative overflow-x-auto">
       <canvas
         ref={canvasRef}
         width={600}
         height={660}
         onClickCapture={handleCanvasClickCapture}
         onClick={handleCanvasClick}
+        onTouchStart={(e) => {
+          // Convert touch to click and let React's onClick handle it
+          e.preventDefault();
+        }}
         onContextMenu={handleContextMenu}
+        className="mx-auto"
         style={{
           display: 'block',
-          width: '600px',
-          height: '660px'
+          touchAction: 'none',
+          width: '100%',
+          maxWidth: '600px',
+          height: 'auto'
         }}
       />
     </div>

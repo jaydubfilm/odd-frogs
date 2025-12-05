@@ -1,6 +1,7 @@
 ﻿import { FrogData, FrogType, FirePattern, GridPosition, FoodData, GridCell } from '../../types/game';
 import { FROG_STATS, GAME_CONFIG, UPGRADE_MULTIPLIER } from '@data/constants';
-import { AudioManager } from './AudioManager'; 
+import { AudioManager } from './AudioManager';
+import { createDefaultUpgradeTree } from '../../data/UpgradeTrees';
 
 export class FrogSystem {
   private frogIdCounter = 0;
@@ -22,6 +23,10 @@ export class FrogSystem {
       lastAttackTime: 0,
       targetFood: null,
       totalSpent: 0,
+      upgradeState: {
+        tree: createDefaultUpgradeTree(),
+        totalSpent: 0
+      },
     };
   }
  

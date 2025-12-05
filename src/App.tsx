@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { GameCanvas } from './components/game/GameCanvas';
 import { FrogSelector } from './components/ui/FrogSelector';
 import { GameStats } from './components/ui/GameStats';
@@ -39,6 +39,7 @@ function App() {
     isVictory: false,
     currentLevel: 1,
     selectedFrogType: null,
+    selectedFrog: null,
     selectedGridCell: null,
     gameSpeed: 1,
   });
@@ -66,6 +67,7 @@ function App() {
       isVictory: false,
       currentLevel: levelNumber,
       selectedFrogType: null,
+      selectedFrog: null,
       selectedGridCell: null,
       gameSpeed: 1,
     });
@@ -172,7 +174,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
       {showLevelMap ? (
         <LevelMap
           progress={levelProgress}
@@ -180,9 +182,9 @@ function App() {
           onUnlockAll={handleUnlockAll}
         />
       ) : (
-        <div className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="text-center mb-8">
+          <div className="h-full flex flex-col px-2 pt-2 pb-10">
+            {/* Header */}
+          <div className="text-center mb-2 flex-shrink-0">
             <button
               onClick={handleBackToMap}
               className="mb-4 px-6 py-2 bg-white rounded-lg shadow-lg hover:bg-gray-100 font-bold"
@@ -194,19 +196,14 @@ function App() {
             </h1>
           </div>
 
-          {/* Main Game Area */}
-          <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
-            {/* Left Panel - Frog Selector */}
-            <div className="w-full lg:w-80">
-              <FrogSelector
-                selectedFrog={gameState.selectedFrogType}
-                onSelectFrog={handleSelectFrog}
-                playerMoney={gameState.money}
-              />
-            </div>
-
-            {/* Center - Game Canvas */}
-            <div className="flex-shrink-0">
+            {/* Main Game Area */}
+            <div className="flex flex-col gap-2 flex-1 min-h-0">
+              {/* Mobile: Compact stats at top */}
+              <div className="lg:hidden flex-shrink-0">
+                <GameStats gameState={gameState} waveInfo={waveInfo} compact />
+              </div>
+              {/* Canvas - centered, no scroll */}
+              <div className="flex-1 flex items-center justify-center min-h-0">
                 <GameCanvas
                   key={levelKey}
                   level={level}
@@ -215,27 +212,47 @@ function App() {
                   onWaveInfoChange={handleWaveInfoChange}
                   onLevelComplete={handleLevelComplete}
                 />
-            </div>
+              </div>
 
-            {/* Right Panel - Game Stats */}
-            <div className="w-full lg:w-80">
-              <GameStats gameState={gameState} waveInfo={waveInfo} />
+              {/* Mobile: Compact frog selector at bottom */}
+              <div className="lg:hidden flex-shrink-0">
+                <FrogSelector
+                  selectedFrog={gameState.selectedFrogType}
+                  onSelectFrog={handleSelectFrog}
+                  playerMoney={gameState.money}
+                />
+              </div>
 
-              {/* Instructions */}
-              <div className="mt-4 bg-white/90 rounded-lg p-4 shadow-lg">
-                <h3 className="text-lg font-bold text-gray-800 mb-2">
-                  How to Play
-                </h3>
-                <ul className="text-sm text-gray-700 space-y-1">
-                  <li>• Select a frog type</li>
-                  <li>• Click on a lily pad to place it</li>
-                  <li>• Frogs attack food automatically</li>
-                  <li>• Don't let food reach the bottom!</li>
-                  <li>• Earn money to buy more frogs</li>
-                </ul>
+              {/* Desktop: Side panels */}
+              <div className="hidden lg:flex flex-row gap-6 justify-center">
+                <div className="w-80">
+                  <FrogSelector
+                    selectedFrog={gameState.selectedFrogType}
+                    onSelectFrog={handleSelectFrog}
+                    playerMoney={gameState.money}
+                  />
+                </div>
+                <div className="w-80">
+                  <GameStats gameState={gameState} waveInfo={waveInfo} />
+                </div>
+              </div>
+
+              {/* Instructions - keep on desktop only */}
+              <div className="hidden lg:block w-80">
+                <div className="mt-4 bg-white/90 rounded-lg p-4 shadow-lg">
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">
+                    How to Play
+                  </h3>
+                  <ul className="text-sm text-gray-700 space-y-1">
+                    <li>• Select a frog type</li>
+                    <li>• Click on a lily pad to place it</li>
+                    <li>• Frogs attack food automatically</li>
+                    <li>• Don't let food reach the bottom!</li>
+                    <li>• Earn money to buy more frogs</li>
+                  </ul>
+                </div>
               </div>
             </div>
-          </div>
         </div>
       )}
     </div>

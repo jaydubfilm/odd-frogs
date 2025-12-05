@@ -89,6 +89,7 @@ export interface FrogData {
   targetFood: string | null;
   tongue?: TongueState;
   totalSpent: number; // Track money spent for sell value
+  upgradeState: FrogUpgradeState;
 }
 
 export interface FoodStats {
@@ -168,16 +169,6 @@ export interface LevelData {
   streams: StreamPath[];
   waves: WaveData[];
   startingMoney: number;
-}
-
-export interface WaveData {
-  waveNumber: number;
-  foods: {
-    type: FoodType;
-    count: number;
-    spawnInterval: number; // seconds between spawns
-    streamId: string;
-  }[];
 }
 
 export interface GameConfig {

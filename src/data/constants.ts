@@ -25,7 +25,7 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     damage: 5,
     attackSpeed: 3,
     range: 2,
-    cost: 120,
+    cost: 100,
     upgradeCost: 180,
     color: '#3498DB',
     firePattern: FirePattern.OMNI,

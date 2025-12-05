@@ -59,10 +59,10 @@ export class Renderer {
       this.relaxSpine(spine);
 
       // 4. COMPUTE NORMALS: Calculate the "Left/Right" direction for every point
-      this.computeSpineGeometry(spine);
+      const spineNodes = this.computeSpineGeometry(spine);
 
       // 5. RENDER: Draw each stream as a parallel offset of the spine
-      this.drawGroupRibbons(spine, group.streamIndices, streams.length);
+      this.drawGroupRibbons(spineNodes, group.streamIndices, streams.length);
     });
   }
 

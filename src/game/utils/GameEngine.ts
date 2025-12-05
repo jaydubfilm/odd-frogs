@@ -319,9 +319,11 @@ export class GameEngine {
   
   private handleCanvasClick(event: MouseEvent): void {
     const rect = this.canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-
+    // Account for CSS scaling
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    const x = (event.clientX - rect.left) * scaleX;
+    const y = (event.clientY - rect.top) * scaleY;
     console.log('Click detected at', x, y, 'selectedFrogType:', this.gameState.selectedFrogType);
 
     // Check for restart button click if game is over OR victory

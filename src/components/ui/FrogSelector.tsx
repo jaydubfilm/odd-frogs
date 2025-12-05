@@ -8,52 +8,40 @@ interface FrogSelectorProps {
   playerMoney: number;
 }
 
-export const FrogSelector: React.FC<FrogSelectorProps> = ({
+export const FrogSelector = ({
   selectedFrog,
   onSelectFrog,
   playerMoney,
-}) => {
+}: FrogSelectorProps) => {
   const frogTypes = Object.values(FrogType);
 
   return (
-    <div className="bg-white/90 rounded-lg p-4 shadow-lg">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">Select Frog</h2>
-      <div className="space-y-2">
+    <div className="bg-white/90 rounded-lg p-2 shadow-lg">
+      <div className="flex gap-2 justify-center">
         {frogTypes.map(frogType => {
-          const stats = FROG_STATS[frogType];
-          const canAfford = playerMoney >= stats.cost;
-          const isSelected = selectedFrog === frogType;
+            const stats = FROG_STATS[frogType];
+            const canAfford = playerMoney >= stats.cost;
+            const isSelected = selectedFrog === frogType;
 
-          return (
-            <button
-              key={frogType}
-              onClick={() => onSelectFrog(frogType)}
-              disabled={!canAfford}
-              className={`
-                frog-button w-full p-3 rounded-lg flex items-center justify-between
-                ${isSelected ? 'selected ring-4 ring-yellow-400' : ''}
+            return (
+              <button
+                key={frogType}
+                onClick={() => onSelectFrog(frogType)}
+                disabled={!canAfford}
+                className={`
+                flex flex-col items-center gap-1 p-2 rounded-lg
+                ${isSelected ? 'ring-2 ring-yellow-400 bg-yellow-50' : 'bg-white'}
                 ${canAfford ? 'hover:bg-gray-100 cursor-pointer' : 'opacity-50 cursor-not-allowed'}
-                bg-white border-2 border-gray-300
+                border-2 border-gray-300
               `}
-            >
-              <div className="flex items-center gap-3">
-                {/* ← REPLACE the colored div with FrogPreview */}
-                <div className="w-12 h-12 flex items-center justify-center border-2 border-gray-300 rounded-lg bg-blue-50">
+              >
+                <div className="w-12 h-12 flex items-center justify-center">
                   <FrogPreview frogType={frogType} size={48} />
                 </div>
-                <div className="text-left">
-                  <div className="font-bold text-gray-800">{frogType}</div>
-                  <div className="text-xs text-gray-600">
-                    DMG: {stats.damage} | SPD: {stats.attackSpeed}/s | RNG: {stats.range}
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-bold text-lg text-green-600">${stats.cost}</div>
-              </div>
-            </button>
-          );
-        })}
+                <div className="font-bold text-sm text-green-600">${stats.cost}</div>
+              </button>
+            );
+          })}
       </div>
     </div>
   );

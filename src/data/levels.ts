@@ -1,9 +1,7 @@
-import { 
-  LevelData, 
-  CellType, 
-  StreamPath, 
-  StreamDirection, 
-  FoodType 
+import {
+  LevelData,
+  CellType,
+  FoodType
 } from '../types/game';
 
 // Level 1: Simple introduction level
@@ -22,6 +20,8 @@ export const LEVEL_1: LevelData = {
     {
       id: 'stream-1',
       channels: [2, 2, 1, 2, 2],
+      channelSections: [],
+      laneSections: [],
       offset: 0,
     },
   ],
