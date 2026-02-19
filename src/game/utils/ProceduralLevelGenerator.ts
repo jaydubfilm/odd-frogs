@@ -48,8 +48,8 @@ export class ProceduralLevelGenerator {
     }
 
     // Difficulty scaling
-    const enemiesPerWave = 5 + waveNumber * 2 + levelNumber * 2;
-    const spawnInterval = Math.max(0.5, 2 - levelNumber * 0.1); // Faster spawns
+    const enemiesPerWave = 3 + waveNumber + Math.floor(levelNumber * 0.8);
+    const spawnInterval = Math.max(0.8, 2.5 - levelNumber * 0.08); // Slower spawns, gentler ramp
 
     // Select food types (more variety in later levels)
     const foodTypesCount = Math.min(1 + Math.floor(levelNumber / 3), allFoodTypes.length);

@@ -1,4 +1,4 @@
-﻿import { useRef, useEffect, useState, type MouseEvent } from 'react';
+﻿import { useRef, useEffect, useState, useImperativeHandle, forwardRef, type MouseEvent } from 'react';
 import { GameEngine } from '../../game/utils/GameEngine';
 import { LevelData, GameState, FrogType, FrogData } from '../../types/game';
 import { RadialUpgradeMenu } from './RadialUpgradeMenu';
@@ -13,13 +13,19 @@ interface GameCanvasProps {
   onLevelComplete?: () => void;
 }
 
-export const GameCanvas = ({
+export interface GameCanvasHandle {
+  placeFrogAtScreenPos: (screenX: number, screenY: number, frogType: FrogType) => boolean;
+  updateDragHighlight: (screenX: number, screenY: number) => void;
+  clearDragHighlight: () => void;
+}
+
+export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
   level,
   selectedFrogType,
   onGameStateChange,
   onWaveInfoChange,
   onLevelComplete
-}: GameCanvasProps) => {
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameEngineRef = useRef<GameEngine | null>(null);
   const initializationRef = useRef(false);
@@ -29,6 +35,44 @@ export const GameCanvas = ({
   const [hoveredFrog, setHoveredFrog] = useState<FrogData | null>(null);
   const [upgradeMenuPosition, setUpgradeMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [currentGameState, setCurrentGameState] = useState<GameState | null>(null);
+
+  const screenToGrid = (screenX: number, screenY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cx = (screenX - rect.left) * scaleX;
+    const cy = (screenY - rect.top) * scaleY;
+    const topMargin = 60;
+    const leftMargin = 60;
+    const col = Math.floor((cx - leftMargin) / GAME_CONFIG.cellSize);
+    const row = Math.floor((cy - topMargin) / GAME_CONFIG.cellSize);
+    if (row < 0 || row >= GAME_CONFIG.gridRows || col < 0 || col >= GAME_CONFIG.gridCols) return null;
+    return { row, col };
+  };
+
+  useImperativeHandle(ref, () => ({
+    placeFrogAtScreenPos(screenX: number, screenY: number, frogType: FrogType): boolean {
+      const engine = gameEngineRef.current;
+      if (!engine) return false;
+      const gridPos = screenToGrid(screenX, screenY);
+      if (!gridPos) return false;
+      engine.setDropHighlight(null);
+      return engine.placeFrog(gridPos, frogType);
+    },
+    updateDragHighlight(screenX: number, screenY: number): void {
+      const engine = gameEngineRef.current;
+      if (!engine) return;
+      const gridPos = screenToGrid(screenX, screenY);
+      engine.setDropHighlight(gridPos);
+    },
+    clearDragHighlight(): void {
+      const engine = gameEngineRef.current;
+      if (!engine) return;
+      engine.setDropHighlight(null);
+    }
+  }));
 
   // Initialize once
   useEffect(() => {
@@ -218,7 +262,7 @@ export const GameCanvas = ({
   };
 
   return (
-    <div className="relative overflow-x-auto">
+    <div className="relative w-full h-full flex items-center justify-center">
       <canvas
         ref={canvasRef}
         width={600}
@@ -234,11 +278,11 @@ export const GameCanvas = ({
         style={{
           display: 'block',
           touchAction: 'none',
-          width: '100%',
-          maxWidth: '600px',
-          height: 'auto'
+          maxWidth: '100%',
+          maxHeight: '100%',
+          objectFit: 'contain'
         }}
       />
     </div>
   );
-};
+});

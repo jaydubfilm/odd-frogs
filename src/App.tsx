@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
-import { GameCanvas } from './components/game/GameCanvas';
+import { GameCanvas, GameCanvasHandle } from './components/game/GameCanvas';
 import { FrogSelector } from './components/ui/FrogSelector';
+import { FrogPreview } from './components/ui/FrogPreview';
 import { GameStats } from './components/ui/GameStats';
 import { LevelMap } from './components/ui/LevelMap';
 import { GameState, FrogType, LevelProgress } from './types/game';
@@ -9,10 +10,19 @@ import './styles/index.css';
 
 function App() {
   const levelGeneratorRef = useRef(new ProceduralLevelGenerator());
+  const gameCanvasRef = useRef<GameCanvasHandle>(null);
 
   // Level selection state
   const [showLevelMap, setShowLevelMap] = useState(true);
   const [selectedLevel, setSelectedLevel] = useState(1);
+
+  // Drag state
+  const [dragging, setDragging] = useState<{
+    frogType: FrogType;
+    x: number; y: number;
+    startX: number; startY: number;
+    startTime: number;
+  } | null>(null);
 
   // Initialize level progress (20 levels)
   const [levelProgress, setLevelProgress] = useState<LevelProgress[]>(() => {
@@ -76,16 +86,12 @@ function App() {
   };
 
   const handleLevelComplete = useCallback(() => {
-    console.log('🎊 Level complete! Current level:', selectedLevel);
-    console.log('Current lives:', gameState.lives);
+    console.log('Level complete! Current level:', selectedLevel);
 
     // Mark current level as completed
     setLevelProgress(prev => {
       const updated = [...prev];
       const currentIndex = selectedLevel - 1;
-
-      console.log('Marking level', selectedLevel, 'as completed');
-      console.log('Current index:', currentIndex);
 
       updated[currentIndex] = {
         ...updated[currentIndex],
@@ -95,14 +101,12 @@ function App() {
 
       // Unlock next level
       if (currentIndex + 1 < updated.length) {
-        console.log('Unlocking level', currentIndex + 2);
         updated[currentIndex + 1] = {
           ...updated[currentIndex + 1],
           unlocked: true,
         };
       }
 
-      console.log('Updated progress:', updated);
       return updated;
     });
 
@@ -118,7 +122,6 @@ function App() {
   };
 
   const handleUnlockAll = useCallback(() => {
-    console.log('🔓 DEV: Unlocking all levels');
     setLevelProgress(prev =>
       prev.map(level => ({
         ...level,
@@ -130,8 +133,6 @@ function App() {
   const handleBackToMap = useCallback(() => {
     // If returning from a victory, mark level as complete
     if (gameState.isVictory) {
-      console.log('🎊 Back to map from victory! Completing level:', selectedLevel);
-
       setLevelProgress(prev => {
         const updated = [...prev];
         const currentIndex = selectedLevel - 1;
@@ -144,7 +145,6 @@ function App() {
 
         // Unlock next level
         if (currentIndex + 1 < updated.length) {
-          console.log('Unlocking level', currentIndex + 2);
           updated[currentIndex + 1] = {
             ...updated[currentIndex + 1],
             unlocked: true,
@@ -173,8 +173,44 @@ function App() {
     setWaveInfo(newWaveInfo);
   };
 
+  // Drag handlers
+  const handleDragStart = useCallback((frogType: FrogType, startX: number, startY: number) => {
+    setDragging({ frogType, x: startX, y: startY, startX, startY, startTime: Date.now() });
+  }, []);
+
+  // Dynamic offset: the higher the thumb, the further the frog icon floats above it
+  const getDragOffsetY = (clientY: number): number => {
+    const screenHeight = window.innerHeight;
+    const normalizedY = Math.max(0, Math.min(1, 1 - clientY / screenHeight));
+    const BASE_OFFSET = -38;
+    const MAX_EXTRA_OFFSET = -162;
+    return BASE_OFFSET + normalizedY * MAX_EXTRA_OFFSET;
+  };
+
+  const handlePointerMoveDrag = useCallback((e: React.PointerEvent) => {
+    if (!dragging) return;
+    setDragging(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+    if (gameCanvasRef.current) {
+      gameCanvasRef.current.updateDragHighlight(e.clientX, e.clientY + getDragOffsetY(e.clientY));
+    }
+  }, [dragging]);
+
+  const handlePointerUpDrag = useCallback((e: React.PointerEvent) => {
+    if (!dragging) return;
+    if (gameCanvasRef.current) {
+      gameCanvasRef.current.placeFrogAtScreenPos(e.clientX, e.clientY + getDragOffsetY(e.clientY), dragging.frogType);
+      gameCanvasRef.current.clearDragHighlight();
+    }
+    setDragging(null);
+  }, [dragging]);
+
   return (
-    <div className="h-screen overflow-hidden bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
+    <div
+      className="overflow-hidden bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500"
+      style={{ height: '100dvh' }}
+      onPointerMove={handlePointerMoveDrag}
+      onPointerUp={handlePointerUpDrag}
+    >
       {showLevelMap ? (
         <LevelMap
           progress={levelProgress}
@@ -182,79 +218,100 @@ function App() {
           onUnlockAll={handleUnlockAll}
         />
       ) : (
-          <div className="h-full flex flex-col px-2 pt-2 pb-10">
-            {/* Header */}
-          <div className="text-center mb-2 flex-shrink-0">
-            <button
-              onClick={handleBackToMap}
-              className="mb-4 px-6 py-2 bg-white rounded-lg shadow-lg hover:bg-gray-100 font-bold"
-            >
-              ← Back to Map
-            </button>
-            <h1 className="text-6xl font-bold text-white mb-2 drop-shadow-lg">
-              🐸 OddFrogs - Level {selectedLevel} 🐸
-            </h1>
-          </div>
-
-            {/* Main Game Area */}
-            <div className="flex flex-col gap-2 flex-1 min-h-0">
-              {/* Mobile: Compact stats at top */}
-              <div className="lg:hidden flex-shrink-0">
+          <div className="h-full flex flex-col px-1">
+            {/* Mobile: Combined header + stats bar */}
+            <div className="lg:hidden flex-shrink-0 flex items-center gap-2 py-1">
+              <button
+                onClick={handleBackToMap}
+                className="px-2 py-1 bg-white rounded shadow text-xs font-bold flex-shrink-0"
+              >
+                ←
+              </button>
+              <span className="text-white font-bold text-sm drop-shadow flex-shrink-0">
+                Lv {selectedLevel}
+              </span>
+              <div className="flex-1 min-w-0">
                 <GameStats gameState={gameState} waveInfo={waveInfo} compact />
               </div>
-              {/* Canvas - centered, no scroll */}
-              <div className="flex-1 flex items-center justify-center min-h-0">
-                <GameCanvas
-                  key={levelKey}
-                  level={level}
-                  selectedFrogType={gameState.selectedFrogType}
-                  onGameStateChange={handleGameStateChange}
-                  onWaveInfoChange={handleWaveInfoChange}
-                  onLevelComplete={handleLevelComplete}
-                />
-              </div>
+            </div>
 
-              {/* Mobile: Compact frog selector at bottom */}
-              <div className="lg:hidden flex-shrink-0">
+            {/* Desktop: Full header */}
+            <div className="hidden lg:block text-center mb-2 flex-shrink-0">
+              <button
+                onClick={handleBackToMap}
+                className="mb-4 px-6 py-2 bg-white rounded-lg shadow-lg hover:bg-gray-100 font-bold"
+              >
+                ← Back to Map
+              </button>
+              <h1 className="text-6xl font-bold text-white mb-2 drop-shadow-lg">
+                OddFrogs - Level {selectedLevel}
+              </h1>
+            </div>
+
+            {/* Canvas - takes all remaining space */}
+            <div className="flex-1 flex items-center justify-center min-h-0">
+              <GameCanvas
+                ref={gameCanvasRef}
+                key={levelKey}
+                level={level}
+                selectedFrogType={gameState.selectedFrogType}
+                onGameStateChange={handleGameStateChange}
+                onWaveInfoChange={handleWaveInfoChange}
+                onLevelComplete={handleLevelComplete}
+              />
+            </div>
+
+            {/* Mobile: Frog selector at bottom */}
+            <div className="lg:hidden flex-shrink-0 pb-1">
+              <FrogSelector
+                selectedFrog={gameState.selectedFrogType}
+                onSelectFrog={handleSelectFrog}
+                onDragStart={handleDragStart}
+                draggingFrogType={dragging?.frogType ?? null}
+                playerMoney={gameState.money}
+              />
+            </div>
+
+            {/* Desktop: Side panels */}
+            <div className="hidden lg:flex flex-row gap-6 justify-center">
+              <div className="w-80">
                 <FrogSelector
                   selectedFrog={gameState.selectedFrogType}
                   onSelectFrog={handleSelectFrog}
+                  onDragStart={handleDragStart}
+                  draggingFrogType={dragging?.frogType ?? null}
                   playerMoney={gameState.money}
                 />
               </div>
-
-              {/* Desktop: Side panels */}
-              <div className="hidden lg:flex flex-row gap-6 justify-center">
-                <div className="w-80">
-                  <FrogSelector
-                    selectedFrog={gameState.selectedFrogType}
-                    onSelectFrog={handleSelectFrog}
-                    playerMoney={gameState.money}
-                  />
-                </div>
-                <div className="w-80">
-                  <GameStats gameState={gameState} waveInfo={waveInfo} />
-                </div>
-              </div>
-
-              {/* Instructions - keep on desktop only */}
-              <div className="hidden lg:block w-80">
-                <div className="mt-4 bg-white/90 rounded-lg p-4 shadow-lg">
-                  <h3 className="text-lg font-bold text-gray-800 mb-2">
-                    How to Play
-                  </h3>
-                  <ul className="text-sm text-gray-700 space-y-1">
-                    <li>• Select a frog type</li>
-                    <li>• Click on a lily pad to place it</li>
-                    <li>• Frogs attack food automatically</li>
-                    <li>• Don't let food reach the bottom!</li>
-                    <li>• Earn money to buy more frogs</li>
-                  </ul>
-                </div>
+              <div className="w-80">
+                <GameStats gameState={gameState} waveInfo={waveInfo} />
               </div>
             </div>
         </div>
       )}
+
+      {/* Drag ghost overlay - lerps from button to offset position */}
+      {dragging && dragging.x !== 0 && (() => {
+        const LERP_DURATION = 150; // ms
+        const elapsed = Date.now() - dragging.startTime;
+        const t = Math.min(1, elapsed / LERP_DURATION);
+        const ease = t * (2 - t); // ease-out quad
+        const offsetY = getDragOffsetY(dragging.y);
+        const targetX = dragging.x - 30;
+        const targetY = dragging.y + offsetY - 30;
+        const lerpX = dragging.startX - 30 + (targetX - (dragging.startX - 30)) * ease;
+        const lerpY = dragging.startY - 30 + (targetY - (dragging.startY - 30)) * ease;
+        return (
+          <div
+            className="fixed pointer-events-none z-50"
+            style={{ left: lerpX, top: lerpY }}
+          >
+            <div className="w-[60px] h-[60px]">
+              <FrogPreview frogType={dragging.frogType} size={60} />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

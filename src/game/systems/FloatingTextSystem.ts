@@ -7,7 +7,7 @@ export class FloatingTextSystem {
     this.texts.push({
       x,
       y,
-      text: `+${amount}$`,
+      text: `${amount}`,
       opacity: 1,
       velocity: 0.5,
       createdAt: Date.now(),

@@ -16,6 +16,7 @@ import { CollisionSystem } from './../systems/CollisionSystem';
 import { WaveSystem } from './../systems/WaveSystem';
 import { AudioManager } from './../systems/AudioManager';
 import { FloatingTextSystem } from './../systems/FloatingTextSystem';
+import { RippleSystem } from './../systems/RippleSystem';
 
 
 export class GameEngine {
@@ -27,14 +28,17 @@ export class GameEngine {
   private frogs: Map<string, FrogData> = new Map();
   private foods: Map<string, FoodData> = new Map();
 
-  private hoveredCell: GridPosition | null = null; 
-  
+  private hoveredCell: GridPosition | null = null;
+  private dropHighlightCell: GridPosition | null = null;
+  private frogSelectTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Systems
   private renderer: Renderer;
   private audioManager: AudioManager;
   private frogSystem: FrogSystem;
   private foodSystem: FoodSystem;
   private floatingTextSystem: FloatingTextSystem;
+  private rippleSystem: RippleSystem;
   private collisionSystem: CollisionSystem;
   private waveSystem: WaveSystem;
   
@@ -72,6 +76,7 @@ export class GameEngine {
     this.audioManager.loadSound('slurp', '/sounds/shortlick.m4a');
     this.frogSystem = new FrogSystem(this.audioManager);
     this.floatingTextSystem = new FloatingTextSystem();
+    this.rippleSystem = new RippleSystem();
     this.foodSystem = new FoodSystem();
     this.collisionSystem = new CollisionSystem();
     this.waveSystem = new WaveSystem(this.foodSystem);
@@ -264,6 +269,9 @@ export class GameEngine {
     // Update floating texts
     this.floatingTextSystem.update(deltaTime * 1000); // Convert to ms
 
+    // Update ripples
+    this.rippleSystem.update();
+
     // Check for foods that reached the end
     this.checkFoodsReachedEnd();
   }
@@ -277,10 +285,11 @@ export class GameEngine {
 
     if (!this.gameState.isPaused) {
       this.renderer.renderStreams(this.currentLevel.streams);
-      this.renderer.renderGrid(this.grid, this.hoveredCell, this.gameState.money);
+      this.renderer.renderGrid(this.grid, this.hoveredCell, this.gameState.money, this.dropHighlightCell);
       this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
       this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money);
       this.renderer.renderFoods(Array.from(this.foods.values()));
+      this.renderer.renderRipples(this.rippleSystem.getRipples());
       this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
     }
 
@@ -397,26 +406,27 @@ export class GameEngine {
       if (frog) {
         const cell = this.grid[frog.gridPosition.row][frog.gridPosition.col];
         const frogPos = cell.position;
+        const buttonSize = 60;
+        const gap = 16;
+        const buttonY = frogPos.y - 50 - buttonSize; // Above the frog
 
-        // Upgrade button (left button)
-        const upgradeButtonX = frogPos.x - 45;
-        const upgradeButtonY = frogPos.y + 35;
-        const buttonSize = 35;
+        // Upgrade button (left)
+        const upgradeButtonX = frogPos.x - buttonSize - gap / 2;
 
-        if (x >= upgradeButtonX && x <= upgradeButtonX + buttonSize &&
-          y >= upgradeButtonY && y <= upgradeButtonY + buttonSize) {
+        if (frog.level < 3 &&
+          x >= upgradeButtonX && x <= upgradeButtonX + buttonSize &&
+          y >= buttonY && y <= buttonY + buttonSize) {
           this.upgradeFrog(frog.id);
           return;
         }
 
         // Sell button (centered if max level, right if not)
-        const sellButtonX = frog.level >= 3 ? frogPos.x - buttonSize / 2 : frogPos.x + 10;
-        const sellButtonY = frogPos.y + 35;
+        const sellButtonX = frog.level >= 3 ? frogPos.x - buttonSize / 2 : frogPos.x + gap / 2;
 
         if (x >= sellButtonX && x <= sellButtonX + buttonSize &&
-          y >= sellButtonY && y <= sellButtonY + buttonSize) {
+          y >= buttonY && y <= buttonY + buttonSize) {
           this.sellFrog(frog.id);
-          this.gameState.selectedFrog = null;
+          this.deselectFrog();
           return;
         }
       }
@@ -446,12 +456,12 @@ export class GameEngine {
 
       // Check if clicking on a frog to select it
       if (cell.frog) {
-        this.gameState.selectedFrog = cell.frog.id;
+        this.selectFrog(cell.frog.id);
         return;
       }
 
       // Deselect frog if clicking elsewhere
-      this.gameState.selectedFrog = null;
+      this.deselectFrog();
     }
   }
 
@@ -509,7 +519,10 @@ export class GameEngine {
     this.gameState.money -= frogData.stats.cost;
     cell.frog = frogData;
     this.frogs.set(frogData.id, frogData);
-    
+
+    // Ripple effect
+    this.rippleSystem.add(cell.position.x, cell.position.y);
+
     return true;
   }
 
@@ -562,7 +575,31 @@ export class GameEngine {
 
   selectFrogType(frogType: FrogType | null): void {
     this.gameState.selectedFrogType = frogType;
-    this.gameState.selectedFrog = null; // Clear any selected frog
+    this.deselectFrog();
+  }
+
+  private selectFrog(frogId: string): void {
+    this.gameState.selectedFrog = frogId;
+    if (this.frogSelectTimer) clearTimeout(this.frogSelectTimer);
+    this.frogSelectTimer = setTimeout(() => {
+      this.deselectFrog();
+    }, 3000);
+  }
+
+  private deselectFrog(): void {
+    this.gameState.selectedFrog = null;
+    if (this.frogSelectTimer) {
+      clearTimeout(this.frogSelectTimer);
+      this.frogSelectTimer = null;
+    }
+  }
+
+  setDropHighlight(gridPos: GridPosition | null): void {
+    this.dropHighlightCell = gridPos;
+  }
+
+  getGridCell(row: number, col: number): GridCell | null {
+    return this.grid[row]?.[col] ?? null;
   }
   
   getGameState(): GameState {

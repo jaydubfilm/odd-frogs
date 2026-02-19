@@ -46,21 +46,45 @@ export class Renderer {
   //    EXISTING RENDER METHODS (Unchanged)
   // =========================================================
 
-  renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number): void {
+  renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number, dropHighlightCell?: GridPosition | null): void {
     grid.forEach(row => {
       row.forEach(cell => {
         this.renderCell(cell);
+
+        // Drop highlight for drag-and-drop
+        if (dropHighlightCell &&
+          cell.gridPosition.row === dropHighlightCell.row &&
+          cell.gridPosition.col === dropHighlightCell.col &&
+          cell.type === CellType.LILYPAD &&
+          cell.frog === null) {
+          this.renderDropHighlight(cell);
+        }
 
         // Show lily removal tooltip if hovering over lily pad with lily
         if (hoveredCell &&
           cell.gridPosition.row === hoveredCell.row &&
           cell.gridPosition.col === hoveredCell.col &&
           cell.type === CellType.LILYPAD_WITH_LILY) {
-          const canAfford = money >= GAME_CONFIG.lilyRemovalCost;  // ← CHANGED
+          const canAfford = money >= GAME_CONFIG.lilyRemovalCost;
           this.renderLilyRemovalTooltip(cell, canAfford);
         }
       });
     });
+  }
+
+  private renderDropHighlight(cell: GridCell): void {
+    const { x, y } = cell.position;
+    const size = GAME_CONFIG.cellSize * 0.5;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = '#FFD700';
+    this.ctx.lineWidth = 3;
+    this.ctx.shadowColor = '#FFD700';
+    this.ctx.shadowBlur = 12;
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, size + 2, 0, Math.PI * 2);
+    this.ctx.stroke();
+    this.ctx.restore();
   }
 
   private renderCell(cell: GridCell): void {
@@ -146,8 +170,8 @@ export class Renderer {
 
     const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
     const pos = cell.position;
-    const buttonSize = 35;
-    const buttonY = pos.y + 35;
+    const buttonSize = 60;
+    const buttonY = pos.y - 50 - buttonSize; // Above the frog
     const isMaxLevel = frog.level >= 3;
     const sellValue = Math.floor((frog.stats.cost + frog.totalSpent) / 2);
 
@@ -156,71 +180,126 @@ export class Renderer {
       const sellButtonX = pos.x - buttonSize / 2;
 
       this.ctx.fillStyle = '#E74C3C';
-      this.ctx.fillRect(sellButtonX, buttonY, buttonSize, buttonSize);
+      this.roundRect(sellButtonX, buttonY, buttonSize, buttonSize, 8);
+      this.ctx.fill();
 
       this.ctx.strokeStyle = '#C0392B';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(sellButtonX, buttonY, buttonSize, buttonSize);
+      this.roundRect(sellButtonX, buttonY, buttonSize, buttonSize, 8);
+      this.ctx.stroke();
 
-      // Dollar sign
+      // Sell label
       this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 20px Arial';
+      this.ctx.font = 'bold 16px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('$', sellButtonX + buttonSize / 2, buttonY + buttonSize / 2 - 2);
+      this.ctx.fillText('$', sellButtonX + buttonSize / 2, buttonY + 20);
 
-      // Sell value text
-      this.ctx.font = 'bold 10px Arial';
-      this.ctx.textBaseline = 'alphabetic';
-      this.ctx.fillText(`$${sellValue}`, sellButtonX + buttonSize / 2, buttonY + 30);
+      // Sell value
+      this.ctx.font = 'bold 20px Arial';
+      this.drawCoinText(`${sellValue}`, sellButtonX + buttonSize / 2, buttonY + 44, 8);
     } else {
       // Show both upgrade and sell buttons
-      // Upgrade button (left)
-      const upgradeButtonX = pos.x - 45;
+      const gap = 16;
+      const upgradeButtonX = pos.x - buttonSize - gap / 2;
       const canUpgrade = money >= frog.stats.upgradeCost;
 
+      // Upgrade button (left)
       this.ctx.fillStyle = canUpgrade ? '#4CAF50' : '#888';
-      this.ctx.fillRect(upgradeButtonX, buttonY, buttonSize, buttonSize);
+      this.roundRect(upgradeButtonX, buttonY, buttonSize, buttonSize, 8);
+      this.ctx.fill();
 
       this.ctx.strokeStyle = canUpgrade ? '#45a049' : '#666';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(upgradeButtonX, buttonY, buttonSize, buttonSize);
+      this.roundRect(upgradeButtonX, buttonY, buttonSize, buttonSize, 8);
+      this.ctx.stroke();
 
-      // Up arrow
+      // Small up arrow
       this.ctx.fillStyle = 'white';
+      const cx = upgradeButtonX + buttonSize / 2;
       this.ctx.beginPath();
-      this.ctx.moveTo(upgradeButtonX + buttonSize / 2, buttonY + 8);
-      this.ctx.lineTo(upgradeButtonX + buttonSize / 2 - 8, buttonY + 18);
-      this.ctx.lineTo(upgradeButtonX + buttonSize / 2 + 8, buttonY + 18);
+      this.ctx.moveTo(cx, buttonY + 10);
+      this.ctx.lineTo(cx - 8, buttonY + 20);
+      this.ctx.lineTo(cx + 8, buttonY + 20);
       this.ctx.closePath();
       this.ctx.fill();
 
       // Cost text
-      this.ctx.font = 'bold 10px Arial';
+      this.ctx.font = 'bold 20px Arial';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText(`$${frog.stats.upgradeCost}`, upgradeButtonX + buttonSize / 2, buttonY + 30);
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillStyle = 'white';
+      this.drawCoinText(`${frog.stats.upgradeCost}`, cx, buttonY + 42, 8);
 
       // Sell button (right)
-      const sellButtonX = pos.x + 10;
+      const sellButtonX = pos.x + gap / 2;
 
       this.ctx.fillStyle = '#E74C3C';
-      this.ctx.fillRect(sellButtonX, buttonY, buttonSize, buttonSize);
+      this.roundRect(sellButtonX, buttonY, buttonSize, buttonSize, 8);
+      this.ctx.fill();
 
       this.ctx.strokeStyle = '#C0392B';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(sellButtonX, buttonY, buttonSize, buttonSize);
+      this.roundRect(sellButtonX, buttonY, buttonSize, buttonSize, 8);
+      this.ctx.stroke();
 
-      // Dollar sign
+      // Sell label
       this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 20px Arial';
+      this.ctx.font = 'bold 14px Arial';
+      this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('$', sellButtonX + buttonSize / 2, buttonY + buttonSize / 2 - 2);
+      this.ctx.fillText('$', sellButtonX + buttonSize / 2, buttonY + 18);
 
-      // Sell value text
-      this.ctx.font = 'bold 10px Arial';
-      this.ctx.textBaseline = 'alphabetic';
-      this.ctx.fillText(`$${sellValue}`, sellButtonX + buttonSize / 2, buttonY + 30);
+      // Sell value
+      this.ctx.font = 'bold 20px Arial';
+      this.drawCoinText(`${sellValue}`, sellButtonX + buttonSize / 2, buttonY + 42, 8);
     }
+  }
+
+  private drawCoin(cx: number, cy: number, radius: number): void {
+    this.ctx.save();
+    // Outer circle
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    this.ctx.fillStyle = '#FFD700';
+    this.ctx.fill();
+    this.ctx.strokeStyle = '#B8860B';
+    this.ctx.lineWidth = radius * 0.15;
+    this.ctx.stroke();
+    // Inner ring
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, radius * 0.6, 0, Math.PI * 2);
+    this.ctx.strokeStyle = '#DAA520';
+    this.ctx.lineWidth = radius * 0.1;
+    this.ctx.stroke();
+    // Highlight
+    this.ctx.beginPath();
+    this.ctx.ellipse(cx - radius * 0.2, cy - radius * 0.3, radius * 0.3, radius * 0.2, 0, 0, Math.PI * 2);
+    this.ctx.fillStyle = 'rgba(255, 248, 220, 0.4)';
+    this.ctx.fill();
+    this.ctx.restore();
+  }
+
+  private drawCoinText(text: string, x: number, y: number, coinRadius: number): void {
+    const textWidth = this.ctx.measureText(text).width;
+    const totalWidth = coinRadius * 2 + 3 + textWidth;
+    const startX = x - totalWidth / 2;
+    this.drawCoin(startX + coinRadius, y, coinRadius);
+    this.ctx.fillText(text, startX + coinRadius * 2 + 3 + textWidth / 2, y);
+  }
+
+  private roundRect(x: number, y: number, w: number, h: number, r: number): void {
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + r, y);
+    this.ctx.lineTo(x + w - r, y);
+    this.ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    this.ctx.lineTo(x + w, y + h - r);
+    this.ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    this.ctx.lineTo(x + r, y + h);
+    this.ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    this.ctx.lineTo(x, y + r);
+    this.ctx.quadraticCurveTo(x, y, x + r, y);
+    this.ctx.closePath();
   }
 
   private renderFrog(frog: FrogData, grid: GridCell[][]): void {
@@ -233,17 +312,37 @@ export class Renderer {
       this.renderTongue(pos, frog.tongue);
     }
 
+    // Body
     this.ctx.fillStyle = frog.stats.color;
     this.ctx.beginPath();
     this.ctx.arc(pos.x, pos.y, size / 2, 0, Math.PI * 2);
     this.ctx.fill();
 
+    // Spots — seeded from frog ID for stable random positions
+    this.ctx.fillStyle = this.darkenColor(frog.stats.color, 0.35);
+    const bodyR = size / 2;
+    let seed = this.hashString(frog.id);
+    const spotCount = 2 + (seed % 5); // 2-6 spots
+    for (let i = 0; i < spotCount; i++) {
+      seed = this.nextSeed(seed);
+      const angle = (seed % 1000) / 1000 * Math.PI * 2;
+      seed = this.nextSeed(seed);
+      const dist = ((seed % 1000) / 1000) * 0.6 * bodyR;
+      seed = this.nextSeed(seed);
+      const spotR = size * 0.04 + ((seed % 1000) / 1000) * size * 0.04;
+      this.ctx.beginPath();
+      this.ctx.arc(pos.x + Math.cos(angle) * dist, pos.y + Math.sin(angle) * dist, spotR, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
+    // Eyes
     this.ctx.fillStyle = 'white';
     this.ctx.beginPath();
     this.ctx.arc(pos.x - size / 4, pos.y - size / 4, size / 6, 0, Math.PI * 2);
     this.ctx.arc(pos.x + size / 4, pos.y - size / 4, size / 6, 0, Math.PI * 2);
     this.ctx.fill();
 
+    // Pupils
     this.ctx.fillStyle = 'black';
     this.ctx.beginPath();
     this.ctx.arc(pos.x - size / 4, pos.y - size / 4, size / 12, 0, Math.PI * 2);
@@ -301,52 +400,227 @@ export class Renderer {
   }
 
   private renderFood(food: FoodData): void {
-    const { position, type, stats } = food;
+    const { position, type } = food;
     const baseSize = 30;
     const sizeMultiplier = this.getFoodSizeMultiplier(type);
     const size = baseSize * sizeMultiplier;
+    const x = position.x;
+    const y = position.y;
+    const r = size / 2;
 
-    let color = '#FFA500';
+    this.ctx.save();
+
     switch (type) {
-      case 'CAKE':
-        color = '#FFB6C1';
+      case 'APPLE': {
+        // Red apple body
+        this.ctx.fillStyle = '#E53935';
+        this.ctx.beginPath();
+        this.ctx.arc(x, y + 2, r, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.strokeStyle = '#B71C1C';
+        this.ctx.lineWidth = 1.5;
+        this.ctx.stroke();
+        // Stem
+        this.ctx.strokeStyle = '#5D4037';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y - r + 2);
+        this.ctx.lineTo(x + 1, y - r - 5);
+        this.ctx.stroke();
+        // Leaf
+        this.ctx.fillStyle = '#43A047';
+        this.ctx.beginPath();
+        this.ctx.ellipse(x + 5, y - r - 2, 5, 3, 0.3, 0, Math.PI * 2);
+        this.ctx.fill();
         break;
-      case 'APPLE':
-        color = '#FF0000';
+      }
+      case 'BURGER': {
+        const bw = r * 1.3;
+        // Bottom bun
+        this.ctx.fillStyle = '#D4A056';
+        this.ctx.beginPath();
+        this.ctx.ellipse(x, y + 5, bw, r * 0.4, 0, 0, Math.PI);
+        this.ctx.fill();
+        // Patty
+        this.ctx.fillStyle = '#5D4037';
+        this.ctx.fillRect(x - bw + 2, y - 2, (bw - 2) * 2, 7);
+        // Lettuce
+        this.ctx.fillStyle = '#66BB6A';
+        this.ctx.fillRect(x - bw + 1, y - 5, (bw - 1) * 2, 4);
+        // Top bun
+        this.ctx.fillStyle = '#E8A642';
+        this.ctx.beginPath();
+        this.ctx.ellipse(x, y - 5, bw, r * 0.55, 0, Math.PI, Math.PI * 2);
+        this.ctx.fill();
+        // Sesame seeds
+        this.ctx.fillStyle = '#FFF9C4';
+        this.ctx.beginPath();
+        this.ctx.ellipse(x - 4, y - 9, 2, 1.2, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.ellipse(x + 5, y - 8, 2, 1.2, 0.3, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Outline
+        this.ctx.strokeStyle = '#6D4C00';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.ellipse(x, y - 5, bw, r * 0.55, 0, Math.PI, Math.PI * 2);
+        this.ctx.stroke();
         break;
-      case 'BEANS':
-        color = '#8B4513';
+      }
+      case 'CAKE': {
+        // Cake body
+        this.ctx.fillStyle = '#FFCCBC';
+        this.ctx.fillRect(x - r, y - r * 0.3, r * 2, r * 1.3);
+        // Frosting top
+        this.ctx.fillStyle = '#F48FB1';
+        this.ctx.fillRect(x - r, y - r * 0.5, r * 2, r * 0.4);
+        // Frosting drip
+        this.ctx.beginPath();
+        this.ctx.arc(x - r * 0.4, y - r * 0.1, 3, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(x + r * 0.5, y - r * 0.05, 2.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Cherry on top
+        this.ctx.fillStyle = '#E53935';
+        this.ctx.beginPath();
+        this.ctx.arc(x, y - r * 0.65, 4, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Outline
+        this.ctx.strokeStyle = '#8D6E63';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(x - r, y - r * 0.5, r * 2, r * 1.5);
         break;
-      case 'BURGER':
-        color = '#FFD700';
+      }
+      case 'BEANS': {
+        // Can body
+        this.ctx.fillStyle = '#A1887F';
+        this.ctx.fillRect(x - r * 0.6, y - r * 0.8, r * 1.2, r * 1.6);
+        // Label
+        this.ctx.fillStyle = '#FF8A65';
+        this.ctx.fillRect(x - r * 0.55, y - r * 0.4, r * 1.1, r * 0.9);
+        // Can top rim
+        this.ctx.fillStyle = '#BDBDBD';
+        this.ctx.fillRect(x - r * 0.65, y - r * 0.85, r * 1.3, r * 0.15);
+        // Can bottom rim
+        this.ctx.fillRect(x - r * 0.65, y + r * 0.75, r * 1.3, r * 0.12);
+        // Outline
+        this.ctx.strokeStyle = '#5D4037';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(x - r * 0.6, y - r * 0.8, r * 1.2, r * 1.6);
         break;
-      case 'PIZZA':
-        color = '#FF6347';
+      }
+      case 'PIZZA': {
+        // Triangle slice
+        this.ctx.fillStyle = '#FDD835';
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y - r);
+        this.ctx.lineTo(x - r, y + r * 0.7);
+        this.ctx.lineTo(x + r, y + r * 0.7);
+        this.ctx.closePath();
+        this.ctx.fill();
+        // Crust
+        this.ctx.fillStyle = '#D4A056';
+        this.ctx.beginPath();
+        this.ctx.moveTo(x - r, y + r * 0.7);
+        this.ctx.lineTo(x + r, y + r * 0.7);
+        this.ctx.lineTo(x + r * 0.85, y + r * 0.95);
+        this.ctx.lineTo(x - r * 0.85, y + r * 0.95);
+        this.ctx.closePath();
+        this.ctx.fill();
+        // Pepperoni
+        this.ctx.fillStyle = '#C62828';
+        this.ctx.beginPath();
+        this.ctx.arc(x - 3, y, 3.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(x + 4, y + 3, 3, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(x, y - r * 0.4, 2.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Outline
+        this.ctx.strokeStyle = '#BF360C';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y - r);
+        this.ctx.lineTo(x - r, y + r * 0.7);
+        this.ctx.lineTo(x + r, y + r * 0.7);
+        this.ctx.closePath();
+        this.ctx.stroke();
         break;
-      case 'DONUT':
-        color = '#D2691E';
+      }
+      case 'DONUT': {
+        // Outer ring
+        this.ctx.fillStyle = '#D4A056';
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, r, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Frosting
+        this.ctx.fillStyle = '#F48FB1';
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, r * 0.9, Math.PI, Math.PI * 2);
+        this.ctx.lineTo(x + r * 0.9, y + 2);
+        this.ctx.arc(x, y + 2, r * 0.9, 0, Math.PI);
+        this.ctx.closePath();
+        this.ctx.fill();
+        // Hole
+        this.ctx.fillStyle = '#87CEEB';
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Sprinkles
+        this.ctx.fillStyle = '#FFF176';
+        this.ctx.fillRect(x - 6, y - 5, 4, 2);
+        this.ctx.fillStyle = '#4FC3F7';
+        this.ctx.fillRect(x + 3, y - 3, 4, 2);
+        this.ctx.fillStyle = '#E53935';
+        this.ctx.fillRect(x - 2, y + 3, 4, 2);
+        // Outline
+        this.ctx.strokeStyle = '#8D6E63';
+        this.ctx.lineWidth = 1.5;
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, r, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
+        this.ctx.stroke();
         break;
-      case 'CHERRY':
-        color = '#DC143C';
+      }
+      case 'CHERRY': {
+        // Two cherries
+        this.ctx.fillStyle = '#C62828';
+        this.ctx.beginPath();
+        this.ctx.arc(x - 4, y + 2, r * 0.7, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(x + 4, y + 2, r * 0.7, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Stems
+        this.ctx.strokeStyle = '#33691E';
+        this.ctx.lineWidth = 1.5;
+        this.ctx.beginPath();
+        this.ctx.moveTo(x - 4, y - r * 0.4);
+        this.ctx.quadraticCurveTo(x - 1, y - r - 2, x + 1, y - r - 4);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(x + 4, y - r * 0.4);
+        this.ctx.quadraticCurveTo(x + 1, y - r - 2, x + 1, y - r - 4);
+        this.ctx.stroke();
+        // Highlight
+        this.ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        this.ctx.beginPath();
+        this.ctx.arc(x - 5, y, 2, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(x + 3, y, 2, 0, Math.PI * 2);
+        this.ctx.fill();
         break;
+      }
     }
 
-    this.ctx.fillStyle = color;
-    this.ctx.beginPath();
-    this.ctx.arc(position.x, position.y, size / 2, 0, Math.PI * 2);
-    this.ctx.fill();
-
-    // Special rendering for DONUT (add a hole)
-    if (type === 'DONUT') {
-      this.ctx.fillStyle = '#87CEEB';
-      this.ctx.beginPath();
-      this.ctx.arc(position.x, position.y, size / 4, 0, Math.PI * 2);
-      this.ctx.fill();
-    }
-
-    this.ctx.strokeStyle = '#000';
-    this.ctx.lineWidth = 2;
-    this.ctx.stroke();
+    this.ctx.restore();
   }
 
   private getFoodSizeMultiplier(type: FoodType): number {
@@ -557,18 +831,46 @@ export class Renderer {
     }
   }
 
+  renderRipples(ripples: { x: number; y: number; radius: number; opacity: number }[]): void {
+    ripples.forEach(r => {
+      this.ctx.save();
+      this.ctx.globalAlpha = r.opacity;
+      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.restore();
+    });
+  }
+
   renderFloatingTexts(texts: FloatingText[]): void {
-    this.ctx.font = 'bold 16px Arial';
     this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
 
     texts.forEach(text => {
       this.ctx.save();
       this.ctx.globalAlpha = text.opacity;
+
+      const coinRadius = 16;
+      const numberFont = 'bold 48px Arial';
+      this.ctx.font = numberFont;
+      const numberWidth = this.ctx.measureText(text.text).width;
+      const gap = 4;
+      const totalWidth = coinRadius * 2 + gap + numberWidth;
+      const startX = text.x - totalWidth / 2;
+
+      // Coin icon
+      this.drawCoin(startX + coinRadius, text.y, coinRadius);
+
+      // Number
       this.ctx.fillStyle = '#FFD700';
       this.ctx.strokeStyle = '#000';
-      this.ctx.lineWidth = 3;
-      this.ctx.strokeText(text.text, text.x, text.y);
-      this.ctx.fillText(text.text, text.x, text.y);
+      this.ctx.lineWidth = 4;
+      const numX = startX + coinRadius * 2 + gap + numberWidth / 2;
+      this.ctx.strokeText(text.text, numX, text.y);
+      this.ctx.fillText(text.text, numX, text.y);
+
       this.ctx.restore();
     });
   }
@@ -602,5 +904,25 @@ export class Renderer {
       pos.x,
       buttonY + buttonHeight / 2
     );
+  }
+
+  private hashString(str: string): number {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) {
+      h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }
+
+  private nextSeed(seed: number): number {
+    return Math.abs(((seed * 1103515245 + 12345) | 0));
+  }
+
+  private darkenColor(hex: string, amount: number): string {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.max(0, Math.floor(((num >> 16) & 0xFF) * (1 - amount)));
+    const g = Math.max(0, Math.floor(((num >> 8) & 0xFF) * (1 - amount)));
+    const b = Math.max(0, Math.floor((num & 0xFF) * (1 - amount)));
+    return `rgb(${r},${g},${b})`;
   }
 }

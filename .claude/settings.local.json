@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"New-NetFirewallRule -DisplayName ''Vite Dev Server'' -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow\")",
+      "Bash(powershell -Command:*)",
+      "Bash(ipconfig:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npx vite:*)"
+    ]
+  }
+}

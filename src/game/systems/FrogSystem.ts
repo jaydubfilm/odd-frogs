@@ -50,7 +50,7 @@ export class FrogSystem {
       }
 
       // Check if line of sight is blocked by rocks
-      if (this.isLineOfSightBlocked(frogPos, food.position, grid)) {
+      if (this.isLineOfSightBlocked(frogPos, food.position, grid, frog.gridPosition)) {
         return;
       }
 
@@ -81,21 +81,21 @@ export class FrogSystem {
     const dy = foodPos.y - frogPos.y;
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-    // Cone width (total 20 degrees, so +/- 10)
-    const t = 10;
+    // Cone half-width in degrees
+    const t = 30;
 
     if (firePattern === FirePattern.STRAIGHT_UP) {
-      // Up is -90. Check between -100 and -80
-      return angle >= (-90 - t) && angle <= (-90 + t);
+      // Fires vertically — both up (-90) and down (90)
+      const up = angle >= (-90 - t) && angle <= (-90 + t);
+      const down = angle >= (90 - t) && angle <= (90 + t);
+      return up || down;
     }
 
     if (firePattern === FirePattern.LEFT_RIGHT) {
-      // 1. Check RIGHT (0 degrees)
+      // RIGHT (0 degrees)
       const right = angle >= -t && angle <= t;
 
-      // 2. Check LEFT (180 degrees)
-      // We use Math.abs because left is the wrap-around point (-180/180)
-      // This checks if angle is > 170 OR < -170
+      // LEFT (180/-180 degrees)
       const left = Math.abs(angle) >= (180 - t);
 
       return right || left;
@@ -107,28 +107,29 @@ export class FrogSystem {
   private isLineOfSightBlocked(
     frogPos: { x: number; y: number },
     foodPos: { x: number; y: number },
-    grid: GridCell[][]
+    grid: GridCell[][],
+    frogGridPos?: GridPosition
   ): boolean {
-    // Simple line-of-sight check: check if any rock is between frog and food
-    // This is a simplified version - a more sophisticated raycasting could be added
-    
-    const steps = 20;
+    const steps = 10;
     const dx = (foodPos.x - frogPos.x) / steps;
     const dy = (foodPos.y - frogPos.y) / steps;
-    
+
     for (let i = 1; i < steps; i++) {
       const checkX = frogPos.x + dx * i;
       const checkY = frogPos.y + dy * i;
-      
+
       const gridPos = this.pixelToGrid(checkX, checkY);
-      if (gridPos) {
-        const cell = grid[gridPos.row]?.[gridPos.col];
-        if (cell && cell.type === 'ROCK') {
-          return true;
-        }
+      if (!gridPos) continue;
+
+      // Skip the frog's own cell
+      if (frogGridPos && gridPos.row === frogGridPos.row && gridPos.col === frogGridPos.col) continue;
+
+      const cell = grid[gridPos.row]?.[gridPos.col];
+      if (cell && cell.type === 'ROCK') {
+        return true;
       }
     }
-    
+
     return false;
   }
   

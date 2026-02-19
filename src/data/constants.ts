@@ -13,7 +13,7 @@ export const GAME_CONFIG: GameConfig = {
 
 export const FROG_STATS: Record<FrogType, FrogStats> = {
   [FrogType.RED]: {
-    damage: 10,
+    damage: 18,
     attackSpeed: 1.5,
     range: 999,
     cost: 100,
@@ -22,17 +22,17 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     firePattern: FirePattern.LEFT_RIGHT,
   },
   [FrogType.BLUE]: {
-    damage: 5,
+    damage: 10,
     attackSpeed: 3,
-    range: 2,
+    range: 999,
     cost: 100,
     upgradeCost: 180,
     color: '#3498DB',
     firePattern: FirePattern.OMNI,
   },
   [FrogType.GREEN]: {
-    damage: 15,
-    attackSpeed: 3,
+    damage: 25,
+    attackSpeed: 1.5,
     range: 999,
     cost: 150,
     upgradeCost: 200,
@@ -40,7 +40,7 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     firePattern: FirePattern.STRAIGHT_UP,
   },
   [FrogType.YELLOW]: {
-    damage: 8,
+    damage: 15,
     attackSpeed: 2,
     range: 2.5,
     cost: 180,
@@ -49,7 +49,7 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     firePattern: FirePattern.OMNI,
   },
   [FrogType.PURPLE]: {
-    damage: 20,
+    damage: 35,
     attackSpeed: 0.5,
     range: 1.5,
     cost: 200,
@@ -60,13 +60,13 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
 };
 
 export const FOOD_STATS: Record<FoodType, { health: number; maxHealth: number; speed: number; reward: number; size?: number }> = {
-  [FoodType.CAKE]: { health: 150, maxHealth: 150, speed: 30, reward: 15 },
-  [FoodType.APPLE]: { health: 90, maxHealth: 90, speed: 40, reward: 10 },
-  [FoodType.BEANS]: { health: 120, maxHealth: 120, speed: 35, reward: 12 },
-  [FoodType.BURGER]: { health: 180, maxHealth: 180, speed: 25, reward: 20 },
-  [FoodType.PIZZA]: { health: 210, maxHealth: 210, speed: 20, reward: 25 },
-  [FoodType.DONUT]: { health: 360, maxHealth: 360, speed: 15, reward: 40, size: 1.5 },
-  [FoodType.CHERRY]: { health: 60, maxHealth: 60, speed: 80, reward: 15, size: 0.6 },
+  [FoodType.CAKE]: { health: 120, maxHealth: 120, speed: 25, reward: 18 },
+  [FoodType.APPLE]: { health: 60, maxHealth: 60, speed: 32, reward: 12 },
+  [FoodType.BEANS]: { health: 90, maxHealth: 90, speed: 28, reward: 14 },
+  [FoodType.BURGER]: { health: 150, maxHealth: 150, speed: 20, reward: 22 },
+  [FoodType.PIZZA]: { health: 180, maxHealth: 180, speed: 16, reward: 28 },
+  [FoodType.DONUT]: { health: 300, maxHealth: 300, speed: 12, reward: 45, size: 1.5 },
+  [FoodType.CHERRY]: { health: 40, maxHealth: 40, speed: 60, reward: 18, size: 0.6 },
 };
 
 export const COLORS = {

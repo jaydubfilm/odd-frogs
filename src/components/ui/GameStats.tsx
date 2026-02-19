@@ -1,4 +1,5 @@
 import { GameState } from '../../types/game';
+import { CoinIcon } from './CoinIcon';
 
 interface GameStatsProps {
   gameState: GameState;
@@ -31,8 +32,8 @@ export const GameStats = ({ gameState, waveInfo, compact = false }: GameStatsPro
               ))}
             </div>
           </div>
-          <div>
-            <span className="text-gray-700 font-semibold">$</span>
+          <div className="flex items-center gap-0.5">
+            <CoinIcon size={16} />
             <span className="text-lg font-bold text-green-600">{gameState.money}</span>
           </div>
           <div>
@@ -68,8 +69,8 @@ export const GameStats = ({ gameState, waveInfo, compact = false }: GameStatsPro
 
         <div className="flex justify-between items-center">
           <span className="text-gray-700 font-semibold">Money:</span>
-          <span className="text-2xl font-bold text-green-600">
-            ${gameState.money}
+          <span className="text-2xl font-bold text-green-600 flex items-center gap-1">
+            <CoinIcon size={22} />{gameState.money}
           </span>
         </div>
 
