@@ -10,7 +10,7 @@ export class ProceduralLevelGenerator {
     const waves = this.generateWaves(levelNumber);
 
     // Scale starting money
-    const startingMoney = 200 + (levelNumber - 1) * 50;
+    const startingMoney = 20 + (levelNumber - 1) * 5;
 
     return {
       ...baseLevel,

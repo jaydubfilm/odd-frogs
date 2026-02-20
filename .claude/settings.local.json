@@ -5,7 +5,8 @@
       "Bash(powershell -Command:*)",
       "Bash(ipconfig:*)",
       "Bash(npm run dev:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

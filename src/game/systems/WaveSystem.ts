@@ -114,8 +114,8 @@ export class WaveSystem {
     const timeRemaining = this.nextWaveStartTime - currentTime;
     const totalDuration = this.currentWave.duration;
 
-    // Calculate bonus: $10 per second remaining
-    const bonus = Math.floor(timeRemaining * 10);
+    // Calculate bonus: $1 per second remaining
+    const bonus = Math.floor(timeRemaining);
 
     // Force wave to complete by setting next wave time to now
     this.nextWaveStartTime = currentTime;

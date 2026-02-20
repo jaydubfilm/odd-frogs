@@ -28,9 +28,14 @@ export class GameEngine {
   private frogs: Map<string, FrogData> = new Map();
   private foods: Map<string, FoodData> = new Map();
 
+  private handedness: 'left' | 'right' = 'right';
   private hoveredCell: GridPosition | null = null;
+  private selectedLilyCell: GridPosition | null = null;
+  private lilySelectTimer: ReturnType<typeof setTimeout> | null = null;
+  private lilySelectTime: number = 0;
   private dropHighlightCell: GridPosition | null = null;
   private frogSelectTimer: ReturnType<typeof setTimeout> | null = null;
+  private frogSelectTime: number = 0;
 
   // Systems
   private renderer: Renderer;
@@ -127,8 +132,10 @@ export class GameEngine {
 
   private handleMouseMove(event: MouseEvent): void {
     const rect = this.canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    const x = (event.clientX - rect.left) * scaleX;
+    const y = (event.clientY - rect.top) * scaleY;
 
     const gridPos = this.pixelToGrid(x, y);
 
@@ -285,9 +292,9 @@ export class GameEngine {
 
     if (!this.gameState.isPaused) {
       this.renderer.renderStreams(this.currentLevel.streams);
-      this.renderer.renderGrid(this.grid, this.hoveredCell, this.gameState.money, this.dropHighlightCell);
+      this.renderer.renderGrid(this.grid, this.selectedLilyCell, this.gameState.money, this.dropHighlightCell, this.getMenuOpacity(this.lilySelectTime));
       this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
-      this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money);
+      this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money, this.getMenuOpacity(this.frogSelectTime));
       this.renderer.renderFoods(Array.from(this.foods.values()));
       this.renderer.renderRipples(this.rippleSystem.getRipples());
       this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
@@ -297,7 +304,8 @@ export class GameEngine {
       this.gameState,
       this.waveSystem,
       this.currentLevel.waves.length,
-      this.foods
+      this.foods,
+      this.handedness
     );
   }
   
@@ -364,20 +372,15 @@ export class GameEngine {
       return; // Don't process other clicks when paused
     }
 
-    // Check for speed button click (top right)
-    const buttonSize = 40;
-    const speedButtonX = GAME_CONFIG.canvasWidth - 90;
-    const speedButtonY = 10;
+    // Stacked button layout (60px, 5px gap)
+    const buttonSize = 60;
+    const gap = 5;
+    const isLeft = this.handedness === 'left';
+    const baseX = isLeft ? 5 : GAME_CONFIG.canvasWidth - buttonSize - 5;
 
-    if (x >= speedButtonX && x <= speedButtonX + buttonSize &&
-      y >= speedButtonY && y <= speedButtonY + buttonSize) {
-      this.toggleSpeed();
-      return;
-    }
-
-    // Check for pause button click (top right, next to speed)
-    const pauseButtonX = GAME_CONFIG.canvasWidth - 45;
-    const pauseButtonY = 10;
+    // Check for pause button click (top of stack)
+    const pauseButtonX = baseX;
+    const pauseButtonY = 5;
 
     if (x >= pauseButtonX && x <= pauseButtonX + buttonSize &&
       y >= pauseButtonY && y <= pauseButtonY + buttonSize) {
@@ -385,16 +388,24 @@ export class GameEngine {
       return;
     }
 
-    // Check for "Call Next Wave" button click (under speed/pause)
+    // Check for speed button click (second in stack)
+    const speedButtonX = baseX;
+    const speedButtonY = 5 + buttonSize + gap;
+
+    if (x >= speedButtonX && x <= speedButtonX + buttonSize &&
+      y >= speedButtonY && y <= speedButtonY + buttonSize) {
+      this.toggleSpeed();
+      return;
+    }
+
+    // Check for "Call Next Wave" button click (third in stack)
     const currentTime = performance.now() / 1000;
     if (this.waveSystem.canCallNextWave(currentTime, this.foods)) {
-      const buttonX = GAME_CONFIG.canvasWidth - 160;
-      const buttonY = 55;
-      const buttonWidth = 150;
-      const buttonHeight = 35;
+      const callButtonX = baseX;
+      const callButtonY = 5 + (buttonSize + gap) * 2;
 
-      if (x >= buttonX && x <= buttonX + buttonWidth &&
-        y >= buttonY && y <= buttonY + buttonHeight) {
+      if (x >= callButtonX && x <= callButtonX + buttonSize &&
+        y >= callButtonY && y <= callButtonY + buttonSize) {
         this.callNextWave();
         return;
       }
@@ -434,14 +445,32 @@ export class GameEngine {
 
     const gridPos = this.pixelToGrid(x, y);
 
+    // Check if clicking the lily removal confirm button
+    if (this.selectedLilyCell) {
+      const lilyCell = this.grid[this.selectedLilyCell.row]?.[this.selectedLilyCell.col];
+      if (lilyCell) {
+        const pos = lilyCell.position;
+        const buttonSize = 60;
+        const buttonX = pos.x - buttonSize / 2;
+        const buttonY = pos.y - 90;
+        if (x >= buttonX && x <= buttonX + buttonSize &&
+          y >= buttonY && y <= buttonY + buttonSize) {
+          this.removeLily(this.selectedLilyCell);
+          this.deselectLily();
+          return;
+        }
+      }
+      // Clicked elsewhere - deselect lily
+      this.deselectLily();
+    }
+
     if (gridPos) {
       const cell = this.grid[gridPos.row][gridPos.col];
 
-      // Check if clicking on a lily pad with lily
+      // First tap on lily: select it to show remove button
       if (cell.type === CellType.LILYPAD_WITH_LILY &&
         !this.gameState.selectedFrogType) {
-        console.log('Lily removal clicked!');
-        this.removeLily(gridPos);
+        this.selectLily(gridPos);
         return;
       }
 
@@ -578,20 +607,55 @@ export class GameEngine {
     this.deselectFrog();
   }
 
+  setHandedness(handedness: 'left' | 'right'): void {
+    this.handedness = handedness;
+  }
+
+  private static readonly MENU_VISIBLE_MS = 3000;
+  private static readonly MENU_FADE_MS = 1000;
+
   private selectFrog(frogId: string): void {
     this.gameState.selectedFrog = frogId;
+    this.frogSelectTime = Date.now();
     if (this.frogSelectTimer) clearTimeout(this.frogSelectTimer);
     this.frogSelectTimer = setTimeout(() => {
       this.deselectFrog();
-    }, 3000);
+    }, GameEngine.MENU_VISIBLE_MS + GameEngine.MENU_FADE_MS);
   }
 
   private deselectFrog(): void {
     this.gameState.selectedFrog = null;
+    this.frogSelectTime = 0;
     if (this.frogSelectTimer) {
       clearTimeout(this.frogSelectTimer);
       this.frogSelectTimer = null;
     }
+  }
+
+  private selectLily(pos: GridPosition): void {
+    this.selectedLilyCell = pos;
+    this.lilySelectTime = Date.now();
+    if (this.lilySelectTimer) clearTimeout(this.lilySelectTimer);
+    this.lilySelectTimer = setTimeout(() => {
+      this.deselectLily();
+    }, GameEngine.MENU_VISIBLE_MS + GameEngine.MENU_FADE_MS);
+  }
+
+  private deselectLily(): void {
+    this.selectedLilyCell = null;
+    this.lilySelectTime = 0;
+    if (this.lilySelectTimer) {
+      clearTimeout(this.lilySelectTimer);
+      this.lilySelectTimer = null;
+    }
+  }
+
+  private getMenuOpacity(selectTime: number): number {
+    if (selectTime === 0) return 1;
+    const elapsed = Date.now() - selectTime;
+    if (elapsed < GameEngine.MENU_VISIBLE_MS) return 1;
+    const fadeElapsed = elapsed - GameEngine.MENU_VISIBLE_MS;
+    return Math.max(0, 1 - fadeElapsed / GameEngine.MENU_FADE_MS);
   }
 
   setDropHighlight(gridPos: GridPosition | null): void {

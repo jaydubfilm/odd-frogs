@@ -11,12 +11,14 @@ interface GameCanvasProps {
   onGameStateChange?: (state: GameState) => void;
   onWaveInfoChange?: (waveInfo: { current: number; total: number; timeUntilNext: number }) => void;
   onLevelComplete?: () => void;
+  handedness?: 'left' | 'right';
 }
 
 export interface GameCanvasHandle {
   placeFrogAtScreenPos: (screenX: number, screenY: number, frogType: FrogType) => boolean;
   updateDragHighlight: (screenX: number, screenY: number) => void;
   clearDragHighlight: () => void;
+  getCanvasRect: () => DOMRect | null;
 }
 
 export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
@@ -24,7 +26,8 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
   selectedFrogType,
   onGameStateChange,
   onWaveInfoChange,
-  onLevelComplete
+  onLevelComplete,
+  handedness = 'right'
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameEngineRef = useRef<GameEngine | null>(null);
@@ -71,6 +74,9 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
       const engine = gameEngineRef.current;
       if (!engine) return;
       engine.setDropHighlight(null);
+    },
+    getCanvasRect(): DOMRect | null {
+      return canvasRef.current?.getBoundingClientRect() ?? null;
     }
   }));
 
@@ -106,6 +112,12 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
       gameEngineRef.current.selectFrogType(selectedFrogType);
     }
   }, [selectedFrogType]);
+
+  useEffect(() => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.setHandedness(handedness);
+    }
+  }, [handedness]);
 
   // Expose game engine state to parent component
   useEffect(() => {
@@ -262,7 +274,7 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
   };
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center">
+    <div className="relative w-full h-full flex items-end justify-center">
       <canvas
         ref={canvasRef}
         width={600}

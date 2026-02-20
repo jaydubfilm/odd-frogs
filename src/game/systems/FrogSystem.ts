@@ -1,4 +1,4 @@
-﻿import { FrogData, FrogType, FirePattern, GridPosition, FoodData, GridCell } from '../../types/game';
+﻿import { FrogData, FrogType, GridPosition, FoodData, GridCell } from '../../types/game';
 import { FROG_STATS, GAME_CONFIG, UPGRADE_MULTIPLIER } from '@data/constants';
 import { AudioManager } from './AudioManager';
 import { createDefaultUpgradeTree } from '../../data/UpgradeTrees';
@@ -44,11 +44,6 @@ export class FrogSystem {
     let maxDistanceTraveled = -1;
 
     foods.forEach(food => {
-      // Check fire pattern restrictions
-      if (!this.canTargetWithFirePattern(frogPos, food.position, frog.stats.firePattern)) {
-        return;
-      }
-
       // Check if line of sight is blocked by rocks
       if (this.isLineOfSightBlocked(frogPos, food.position, grid, frog.gridPosition)) {
         return;
@@ -70,40 +65,6 @@ export class FrogSystem {
     return priorityFood;
   }
 
-  private canTargetWithFirePattern(
-    frogPos: { x: number; y: number },
-    foodPos: { x: number; y: number },
-    firePattern: FirePattern
-  ): boolean {
-    if (firePattern === FirePattern.OMNI) return true;
-
-    const dx = foodPos.x - frogPos.x;
-    const dy = foodPos.y - frogPos.y;
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-
-    // Cone half-width in degrees
-    const t = 30;
-
-    if (firePattern === FirePattern.STRAIGHT_UP) {
-      // Fires vertically — both up (-90) and down (90)
-      const up = angle >= (-90 - t) && angle <= (-90 + t);
-      const down = angle >= (90 - t) && angle <= (90 + t);
-      return up || down;
-    }
-
-    if (firePattern === FirePattern.LEFT_RIGHT) {
-      // RIGHT (0 degrees)
-      const right = angle >= -t && angle <= t;
-
-      // LEFT (180/-180 degrees)
-      const left = Math.abs(angle) >= (180 - t);
-
-      return right || left;
-    }
-
-    return false;
-  }
-  
   private isLineOfSightBlocked(
     frogPos: { x: number; y: number },
     foodPos: { x: number; y: number },

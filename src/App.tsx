@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { GameCanvas, GameCanvasHandle } from './components/game/GameCanvas';
 import { FrogSelector } from './components/ui/FrogSelector';
 import { FrogPreview } from './components/ui/FrogPreview';
 import { GameStats } from './components/ui/GameStats';
 import { LevelMap } from './components/ui/LevelMap';
+import { SettingsModal } from './components/ui/SettingsModal';
 import { GameState, FrogType, LevelProgress } from './types/game';
 import { ProceduralLevelGenerator } from './game/utils/ProceduralLevelGenerator';
 import './styles/index.css';
@@ -15,6 +16,12 @@ function App() {
   // Level selection state
   const [showLevelMap, setShowLevelMap] = useState(true);
   const [selectedLevel, setSelectedLevel] = useState(1);
+
+  // Settings
+  const [showSettings, setShowSettings] = useState(false);
+  const [handedness, setHandedness] = useState<'left' | 'right'>(
+    () => (localStorage.getItem('handedness') as 'left' | 'right') || 'right'
+  );
 
   // Drag state
   const [dragging, setDragging] = useState<{
@@ -41,7 +48,7 @@ function App() {
 
   const [gameState, setGameState] = useState<GameState>({
     lives: 3,
-    money: 200,
+    money: 20,
     wave: 0,
     score: 0,
     isPaused: false,
@@ -59,6 +66,10 @@ function App() {
     total: 0,
     timeUntilNext: 0
   });
+
+  useEffect(() => {
+    localStorage.setItem('handedness', handedness);
+  }, [handedness]);
 
   const handleSelectLevel = (levelNumber: number) => {
     setSelectedLevel(levelNumber);
@@ -182,27 +193,48 @@ function App() {
   const getDragOffsetY = (clientY: number): number => {
     const screenHeight = window.innerHeight;
     const normalizedY = Math.max(0, Math.min(1, 1 - clientY / screenHeight));
-    const BASE_OFFSET = -38;
-    const MAX_EXTRA_OFFSET = -162;
+    const BASE_OFFSET = -19;
+    const MAX_EXTRA_OFFSET = -181;
     return BASE_OFFSET + normalizedY * MAX_EXTRA_OFFSET;
+  };
+
+  // Horizontal offset: stretches reach diagonally away from the dominant hand.
+  // Normalized (0,0) = handedness-side frog buttons, (1,1) = opposite top corner.
+  // offset = MAX * x * y  →  zero along either axis, max at the diagonal.
+  const getDragOffsetX = (clientX: number, clientY: number): number => {
+    const rect = gameCanvasRef.current?.getCanvasRect();
+    if (!rect) return 0;
+
+    // X axis: 0 at handedness edge of canvas, 1 at opposite edge
+    const normalizedX = handedness === 'right'
+      ? Math.max(0, (rect.right - clientX) / rect.width)
+      : Math.max(0, (clientX - rect.left) / rect.width);
+
+    // Y axis: 0 at bottom of screen (frog buttons), 1 at top of canvas
+    const normalizedY = Math.max(0, (window.innerHeight - clientY) / (window.innerHeight - rect.top));
+
+    const MAX_OFFSET = 200;
+    const result = (handedness === 'right' ? -1 : 1) * MAX_OFFSET * normalizedX * normalizedY;
+    console.log('dragOffsetX', { normalizedX: normalizedX.toFixed(2), normalizedY: normalizedY.toFixed(2), result: result.toFixed(1), rect: !!rect });
+    return result;
   };
 
   const handlePointerMoveDrag = useCallback((e: React.PointerEvent) => {
     if (!dragging) return;
     setDragging(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
     if (gameCanvasRef.current) {
-      gameCanvasRef.current.updateDragHighlight(e.clientX, e.clientY + getDragOffsetY(e.clientY));
+      gameCanvasRef.current.updateDragHighlight(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY));
     }
-  }, [dragging]);
+  }, [dragging, handedness]);
 
   const handlePointerUpDrag = useCallback((e: React.PointerEvent) => {
     if (!dragging) return;
     if (gameCanvasRef.current) {
-      gameCanvasRef.current.placeFrogAtScreenPos(e.clientX, e.clientY + getDragOffsetY(e.clientY), dragging.frogType);
+      gameCanvasRef.current.placeFrogAtScreenPos(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY), dragging.frogType);
       gameCanvasRef.current.clearDragHighlight();
     }
     setDragging(null);
-  }, [dragging]);
+  }, [dragging, handedness]);
 
   return (
     <div
@@ -216,6 +248,7 @@ function App() {
           progress={levelProgress}
           onSelectLevel={handleSelectLevel}
           onUnlockAll={handleUnlockAll}
+          onOpenSettings={() => setShowSettings(true)}
         />
       ) : (
           <div className="h-full flex flex-col px-1">
@@ -249,7 +282,7 @@ function App() {
             </div>
 
             {/* Canvas - takes all remaining space */}
-            <div className="flex-1 flex items-center justify-center min-h-0">
+            <div className="flex-1 flex items-end justify-center min-h-0">
               <GameCanvas
                 ref={gameCanvasRef}
                 key={levelKey}
@@ -258,6 +291,7 @@ function App() {
                 onGameStateChange={handleGameStateChange}
                 onWaveInfoChange={handleWaveInfoChange}
                 onLevelComplete={handleLevelComplete}
+                handedness={handedness}
               />
             </div>
 
@@ -269,6 +303,7 @@ function App() {
                 onDragStart={handleDragStart}
                 draggingFrogType={dragging?.frogType ?? null}
                 playerMoney={gameState.money}
+                handedness={handedness}
               />
             </div>
 
@@ -281,6 +316,7 @@ function App() {
                   onDragStart={handleDragStart}
                   draggingFrogType={dragging?.frogType ?? null}
                   playerMoney={gameState.money}
+                  handedness={handedness}
                 />
               </div>
               <div className="w-80">
@@ -290,6 +326,15 @@ function App() {
         </div>
       )}
 
+      {/* Settings modal */}
+      {showSettings && (
+        <SettingsModal
+          handedness={handedness}
+          onHandednessChange={setHandedness}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
       {/* Drag ghost overlay - lerps from button to offset position */}
       {dragging && dragging.x !== 0 && (() => {
         const LERP_DURATION = 150; // ms
@@ -297,7 +342,8 @@ function App() {
         const t = Math.min(1, elapsed / LERP_DURATION);
         const ease = t * (2 - t); // ease-out quad
         const offsetY = getDragOffsetY(dragging.y);
-        const targetX = dragging.x - 30;
+        const offsetX = getDragOffsetX(dragging.x, dragging.y);
+        const targetX = dragging.x + offsetX - 30;
         const targetY = dragging.y + offsetY - 30;
         const lerpX = dragging.startX - 30 + (targetX - (dragging.startX - 30)) * ease;
         const lerpY = dragging.startY - 30 + (targetY - (dragging.startY - 30)) * ease;

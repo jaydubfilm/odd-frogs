@@ -18,27 +18,50 @@ export class Renderer {
   renderStreams(streams: StreamPath[]): void {
     if (!streams || streams.length === 0) return;
 
-    if (!this.hasLoggedStreams) {
-      console.log('Rendering streams: Using pre-generated smooth paths');
-      this.hasLoggedStreams = true;
-    }
-
-    this.ctx.lineCap = 'round';
-    this.ctx.lineJoin = 'round';
-    this.ctx.strokeStyle = COLORS.STREAM;
-    this.ctx.lineWidth = 8;
+    const time = performance.now() / 1000;
 
     streams.forEach((stream) => {
       if (!stream.smoothPath || stream.smoothPath.points.length === 0) return;
-
       const points = stream.smoothPath.points;
 
-      this.ctx.beginPath();
-      this.ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) {
-        this.ctx.lineTo(points[i].x, points[i].y);
-      }
+      const tracePath = () => {
+        this.ctx.beginPath();
+        this.ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          this.ctx.lineTo(points[i].x, points[i].y);
+        }
+      };
+
+      this.ctx.save();
+      this.ctx.lineCap = 'round';
+      this.ctx.lineJoin = 'round';
+
+      // Soft current — low opacity, no hard edges
+      this.ctx.globalAlpha = 0.5;
+      this.ctx.strokeStyle = COLORS.STREAM;
+      this.ctx.lineWidth = 18;
+      tracePath();
       this.ctx.stroke();
+
+      // Flow lines (animated dashes)
+      this.ctx.globalAlpha = 0.4;
+      this.ctx.strokeStyle = 'rgba(140, 200, 220, 1)';
+      this.ctx.lineWidth = 9;
+      this.ctx.setLineDash([15, 25]);
+      this.ctx.lineDashOffset = -time * 24;
+      tracePath();
+      this.ctx.stroke();
+
+      // Shimmer highlights (faster, thinner)
+      this.ctx.globalAlpha = 0.3;
+      this.ctx.strokeStyle = 'rgba(220, 240, 255, 1)';
+      this.ctx.lineWidth = 6;
+      this.ctx.setLineDash([8, 35]);
+      this.ctx.lineDashOffset = -time * 36;
+      tracePath();
+      this.ctx.stroke();
+
+      this.ctx.restore();
     });
   }
 
@@ -46,7 +69,7 @@ export class Renderer {
   //    EXISTING RENDER METHODS (Unchanged)
   // =========================================================
 
-  renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number, dropHighlightCell?: GridPosition | null): void {
+  renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number, dropHighlightCell?: GridPosition | null, menuOpacity: number = 1): void {
     grid.forEach(row => {
       row.forEach(cell => {
         this.renderCell(cell);
@@ -66,7 +89,10 @@ export class Renderer {
           cell.gridPosition.col === hoveredCell.col &&
           cell.type === CellType.LILYPAD_WITH_LILY) {
           const canAfford = money >= GAME_CONFIG.lilyRemovalCost;
+          this.ctx.save();
+          this.ctx.globalAlpha = menuOpacity;
           this.renderLilyRemovalTooltip(cell, canAfford);
+          this.ctx.restore();
         }
       });
     });
@@ -162,11 +188,14 @@ export class Renderer {
     });
   }
 
-  renderFrogUpgradeUI(selectedFrogId: string | null, frogs: Map<string, FrogData>, grid: GridCell[][], money: number): void {
+  renderFrogUpgradeUI(selectedFrogId: string | null, frogs: Map<string, FrogData>, grid: GridCell[][], money: number, menuOpacity: number = 1): void {
     if (!selectedFrogId) return;
 
     const frog = frogs.get(selectedFrogId);
     if (!frog) return;
+
+    this.ctx.save();
+    this.ctx.globalAlpha = menuOpacity;
 
     const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
     const pos = cell.position;
@@ -254,6 +283,8 @@ export class Renderer {
       this.ctx.font = 'bold 20px Arial';
       this.drawCoinText(`${sellValue}`, sellButtonX + buttonSize / 2, buttonY + 42, 8);
     }
+
+    this.ctx.restore();
   }
 
   private drawCoin(cx: number, cy: number, radius: number): void {
@@ -654,37 +685,45 @@ export class Renderer {
     this.ctx.strokeRect(x, y, barWidth, barHeight);
   }
 
-  renderUI(gameState: GameState, waveSystem: any, totalWaves: number, foods: Map<string, FoodData>): void {
-    // REMOVE the top black bar and stats - those will be in React UI panel
-
+  renderUI(gameState: GameState, waveSystem: any, totalWaves: number, foods: Map<string, FoodData>, handedness: 'left' | 'right' = 'right'): void {
+    const isLeft = handedness === 'left';
     const currentTime = performance.now() / 1000;
     const timeRemaining = waveSystem.getTimeUntilNextWave(currentTime);
     const isLastWave = gameState.wave >= totalWaves;
 
     // Show "Call Next Wave" button (only if not last wave and not victory)
     if (waveSystem.canCallNextWave(currentTime, foods) && !gameState.isVictory && !isLastWave) {
-      const buttonX = GAME_CONFIG.canvasWidth - 160;
-      const buttonY = 55;  // ← Below speed/pause buttons
-      const buttonWidth = 150;
-      const buttonHeight = 35;
-
-      const bonus = Math.floor(timeRemaining * 10);
+      const btnSize = 60;
+      const gap = 5;
+      const callButtonX = isLeft ? 5 : GAME_CONFIG.canvasWidth - btnSize - 5;
+      const callButtonY = 5 + (btnSize + gap) * 2; // Third in the stack
+      const cx = callButtonX + btnSize / 2;
+      const cy = callButtonY + btnSize / 2;
 
       this.ctx.fillStyle = '#FFA500';
-      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+      this.roundRect(callButtonX, callButtonY, btnSize, btnSize, 6);
+      this.ctx.fill();
 
       this.ctx.strokeStyle = '#FF8C00';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+      this.roundRect(callButtonX, callButtonY, btnSize, btnSize, 6);
+      this.ctx.stroke();
 
+      // Up arrow icon (top half)
       this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 14px Arial';
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx, cy - 16);
+      this.ctx.lineTo(cx - 8, cy - 6);
+      this.ctx.lineTo(cx + 8, cy - 6);
+      this.ctx.closePath();
+      this.ctx.fill();
+      this.ctx.fillRect(cx - 3, cy - 8, 6, 10);
+
+      // Thumbs up icon (bottom half)
+      this.ctx.font = 'bold 18px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('CALL NEXT WAVE', buttonX + buttonWidth / 2, buttonY + 14);
-      this.ctx.font = '11px Arial';
-      this.ctx.fillStyle = '#FFD700';
-      this.ctx.fillText(`(+$${bonus} bonus)`, buttonX + buttonWidth / 2, buttonY + 28);
+      this.ctx.fillText('\uD83D\uDC4D', cx, cy + 12);
     }
 
     // Pause screen
@@ -718,56 +757,63 @@ export class Renderer {
       return; // Don't render other UI elements
     }
 
-    // Speed and Pause buttons (top right)
+    // Speed and Pause buttons (stacked vertically)
     if (!gameState.isGameOver && !gameState.isVictory) {
-      const buttonSize = 40;
-      const buttonY = 10;
+      const buttonSize = 60;
+      const gap = 5;
+      const baseX = isLeft ? 5 : GAME_CONFIG.canvasWidth - buttonSize - 5;
 
-      // Speed button
-      const speedButtonX = GAME_CONFIG.canvasWidth - 90;
-
-      this.ctx.fillStyle = gameState.gameSpeed === 1 ? '#4A90E2' : '#FF6B35';
-      this.ctx.fillRect(speedButtonX, buttonY, buttonSize, buttonSize);
-
-      this.ctx.strokeStyle = gameState.gameSpeed === 1 ? '#357ABD' : '#E85A2B';
-      this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(speedButtonX, buttonY, buttonSize, buttonSize);
-
-      this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 20px Arial';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(
-        gameState.gameSpeed === 1 ? '1x' : '2x',
-        speedButtonX + buttonSize / 2,
-        buttonY + buttonSize / 2
-      );
-
-      // Pause button
-      const pauseButtonX = GAME_CONFIG.canvasWidth - 45;
+      // Pause button (top of stack)
+      const pauseButtonX = baseX;
+      const pauseButtonY = 5;
 
       this.ctx.fillStyle = gameState.isPaused ? '#E74C3C' : '#27AE60';
-      this.ctx.fillRect(pauseButtonX, buttonY, buttonSize, buttonSize);
+      this.roundRect(pauseButtonX, pauseButtonY, buttonSize, buttonSize, 6);
+      this.ctx.fill();
 
       this.ctx.strokeStyle = gameState.isPaused ? '#C0392B' : '#229954';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(pauseButtonX, buttonY, buttonSize, buttonSize);
+      this.roundRect(pauseButtonX, pauseButtonY, buttonSize, buttonSize, 6);
+      this.ctx.stroke();
 
       this.ctx.fillStyle = 'white';
 
       if (gameState.isPaused) {
         // Draw play triangle
         this.ctx.beginPath();
-        this.ctx.moveTo(pauseButtonX + buttonSize / 2 - 6, buttonY + buttonSize / 2 - 8);
-        this.ctx.lineTo(pauseButtonX + buttonSize / 2 - 6, buttonY + buttonSize / 2 + 8);
-        this.ctx.lineTo(pauseButtonX + buttonSize / 2 + 8, buttonY + buttonSize / 2);
+        this.ctx.moveTo(pauseButtonX + buttonSize / 2 - 9, pauseButtonY + buttonSize / 2 - 12);
+        this.ctx.lineTo(pauseButtonX + buttonSize / 2 - 9, pauseButtonY + buttonSize / 2 + 12);
+        this.ctx.lineTo(pauseButtonX + buttonSize / 2 + 12, pauseButtonY + buttonSize / 2);
         this.ctx.closePath();
         this.ctx.fill();
       } else {
         // Draw pause bars
-        this.ctx.fillRect(pauseButtonX + buttonSize / 2 - 8, buttonY + buttonSize / 2 - 8, 5, 16);
-        this.ctx.fillRect(pauseButtonX + buttonSize / 2 + 3, buttonY + buttonSize / 2 - 8, 5, 16);
+        this.ctx.fillRect(pauseButtonX + buttonSize / 2 - 11, pauseButtonY + buttonSize / 2 - 12, 8, 24);
+        this.ctx.fillRect(pauseButtonX + buttonSize / 2 + 3, pauseButtonY + buttonSize / 2 - 12, 8, 24);
       }
+
+      // Speed button (second in stack)
+      const speedButtonX = baseX;
+      const speedButtonY = 5 + buttonSize + gap;
+
+      this.ctx.fillStyle = gameState.gameSpeed === 1 ? '#4A90E2' : '#FF6B35';
+      this.roundRect(speedButtonX, speedButtonY, buttonSize, buttonSize, 6);
+      this.ctx.fill();
+
+      this.ctx.strokeStyle = gameState.gameSpeed === 1 ? '#357ABD' : '#E85A2B';
+      this.ctx.lineWidth = 2;
+      this.roundRect(speedButtonX, speedButtonY, buttonSize, buttonSize, 6);
+      this.ctx.stroke();
+
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 28px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(
+        gameState.gameSpeed === 1 ? '1x' : '2x',
+        speedButtonX + buttonSize / 2,
+        speedButtonY + buttonSize / 2
+      );
     }
 
     if (gameState.isVictory) {
@@ -880,30 +926,50 @@ export class Renderer {
     canAfford: boolean
   ): void {
     const pos = cell.position;
-    const buttonWidth = 120;
-    const buttonHeight = 30;
-    const buttonX = pos.x - buttonWidth / 2;
-    const buttonY = pos.y - 50;
+    const buttonSize = 60;
+    const buttonX = pos.x - buttonSize / 2;
+    const buttonY = pos.y - 90;
 
     // Button background
-    this.ctx.fillStyle = canAfford ? 'rgba(255, 59, 48, 0.9)' : 'rgba(128, 128, 128, 0.9)';
-    this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+    this.ctx.fillStyle = canAfford ? '#8B4513' : '#888';
+    this.roundRect(buttonX, buttonY, buttonSize, buttonSize, 8);
+    this.ctx.fill();
 
     // Button border
-    this.ctx.strokeStyle = canAfford ? '#E63946' : '#666';
+    this.ctx.strokeStyle = canAfford ? '#6B3410' : '#666';
     this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+    this.roundRect(buttonX, buttonY, buttonSize, buttonSize, 8);
+    this.ctx.stroke();
 
-    // Button text
+    // Shovel icon
+    this.ctx.save();
+    this.ctx.translate(pos.x, buttonY + 22);
+    this.ctx.fillStyle = canAfford ? '#DDD' : '#AAA';
+    this.ctx.strokeStyle = canAfford ? '#DDD' : '#AAA';
+    this.ctx.lineWidth = 3;
+    this.ctx.lineCap = 'round';
+    // Handle
+    this.ctx.beginPath();
+    this.ctx.moveTo(4, -10);
+    this.ctx.lineTo(-4, 8);
+    this.ctx.stroke();
+    // Blade
+    this.ctx.beginPath();
+    this.ctx.moveTo(-4, 8);
+    this.ctx.lineTo(-9, 6);
+    this.ctx.lineTo(-7, 14);
+    this.ctx.lineTo(1, 14);
+    this.ctx.lineTo(3, 6);
+    this.ctx.closePath();
+    this.ctx.fill();
+    this.ctx.restore();
+
+    // Coin + cost
     this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
     this.ctx.font = 'bold 14px Arial';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    this.ctx.fillText(
-      `Remove for $${GAME_CONFIG.lilyRemovalCost}`,  
-      pos.x,
-      buttonY + buttonHeight / 2
-    );
+    this.drawCoinText(`${GAME_CONFIG.lilyRemovalCost}`, pos.x, buttonY + 48, 6);
   }
 
   private hashString(str: string): number {

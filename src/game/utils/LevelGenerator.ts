@@ -30,7 +30,7 @@ export function generateRandomLevel(): LevelData {
   return {
     id: 'random-level',
     name: 'Random Pond',
-    startingMoney: 200,
+    startingMoney: 20,
     gridLayout,
     streams,
     waves: [], // Use LEVEL_1 waves or generate random

@@ -10,6 +10,7 @@ interface FrogSelectorProps {
   onDragStart?: (frogType: FrogType, startX: number, startY: number) => void;
   draggingFrogType?: FrogType | null;
   playerMoney: number;
+  handedness?: 'left' | 'right';
 }
 
 export const FrogSelector = ({
@@ -18,6 +19,7 @@ export const FrogSelector = ({
   onDragStart,
   draggingFrogType,
   playerMoney,
+  handedness = 'right',
 }: FrogSelectorProps) => {
   const frogTypes = Object.values(FrogType);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
@@ -52,7 +54,7 @@ export const FrogSelector = ({
 
   return (
     <div className="bg-white/90 rounded-lg p-2 shadow-lg">
-      <div className="flex gap-2 justify-center">
+      <div className={`flex gap-2 ${handedness === 'right' ? 'justify-end' : 'justify-start'}`}>
         {frogTypes.map(frogType => {
             const stats = FROG_STATS[frogType];
             const canAfford = playerMoney >= stats.cost;
