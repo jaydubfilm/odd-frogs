@@ -1,69 +1,87 @@
 import { FrogData } from '../../types/game';
-import { UpgradeNode, UpgradeStat } from '../../types/upgrades';
+import { UpgradePath } from '../../types/upgrades';
+import { FROG_STATS, UPGRADE_PATH_COSTS, UPGRADE_PATH_BUFFS } from '@data/constants';
 
 export class UpgradeSystem {
-  canPurchaseUpgrade(frog: FrogData, nodeId: string, playerMoney: number): boolean {
-    const node = frog.upgradeState.tree.nodes.get(nodeId);
-    if (!node || !node.isUnlocked || node.currentLevel >= node.maxLevel) {
-      return false;
-    }
+  canPurchaseUpgrade(frog: FrogData, path: UpgradePath, playerMoney: number): boolean {
+    const state = frog.upgradeState;
 
-    const cost = node.costPerLevel[node.currentLevel];
+    // Can't upgrade NONE path
+    if (path === UpgradePath.NONE) return false;
+
+    // If already committed to a different path, can't switch
+    if (state.path !== UpgradePath.NONE && state.path !== path) return false;
+
+    // Max level is 3
+    if (state.level >= 3) return false;
+
+    const cost = UPGRADE_PATH_COSTS[state.level];
     return playerMoney >= cost;
   }
 
-  purchaseUpgrade(frog: FrogData, nodeId: string): number {
-    const node = frog.upgradeState.tree.nodes.get(nodeId);
-    if (!node || !node.isUnlocked || node.currentLevel >= node.maxLevel) {
-      return 0;
-    }
+  purchaseUpgrade(frog: FrogData, path: UpgradePath): number {
+    const state = frog.upgradeState;
+    const cost = UPGRADE_PATH_COSTS[state.level];
 
-    const cost = node.costPerLevel[node.currentLevel];
-    const value = node.valuePerLevel[node.currentLevel];
-
-    // Apply stat upgrade
-    this.applyStatUpgrade(frog, node.stat, value);
-
-    // Update node level
-    node.currentLevel++;
-    frog.upgradeState.totalSpent += cost;
-
-    // Unlock children if maxed out
-    if (node.currentLevel >= node.maxLevel) {
-      node.children.forEach(childId => {
-        const childNode = frog.upgradeState.tree.nodes.get(childId);
-        if (childNode) {
-          childNode.isUnlocked = true;
-        }
-      });
-    }
+    // Lock in path
+    state.path = path;
+    state.level++;
+    state.totalSpent += cost;
+    frog.totalSpent += cost;
 
     return cost;
   }
 
-  private applyStatUpgrade(frog: FrogData, stat: UpgradeStat, value: number): void {
-    switch (stat) {
-      case UpgradeStat.DAMAGE:
-        frog.stats.damage += value;
-        break;
-      case UpgradeStat.ATTACK_SPEED:
-        frog.stats.attackSpeed += value;
-        break;
-      case UpgradeStat.RANGE:
-        frog.stats.range += value;
-        break;
+  getEffectiveStats(frog: FrogData, allFrogs: Map<string, FrogData>): { damage: number; attackSpeed: number; range: number } {
+    const baseStats = FROG_STATS[frog.type];
+    let damage = baseStats.damage;
+    let attackSpeed = baseStats.attackSpeed;
+    const range = baseStats.range;
+
+    const state = frog.upgradeState;
+
+    // Apply spots self-buff (multiplicative on base)
+    if (state.path === UpgradePath.SPOTS && state.level > 0) {
+      const buffs = UPGRADE_PATH_BUFFS[UpgradePath.SPOTS];
+      damage *= buffs.damageMult![state.level - 1];
+      attackSpeed *= buffs.attackSpeedMult![state.level - 1];
     }
-  }
 
-  getAvailableUpgrades(frog: FrogData): UpgradeNode[] {
-    const available: UpgradeNode[] = [];
+    // Receive buffs from stripe frogs in same row/col (NOT self)
+    allFrogs.forEach(other => {
+      if (other.id === frog.id) return;
+      if (other.upgradeState.level === 0) return;
 
-    frog.upgradeState.tree.nodes.forEach(node => {
-      if (node.isUnlocked && node.currentLevel < node.maxLevel) {
-        available.push(node);
+      const otherState = other.upgradeState;
+
+      if (otherState.path === UpgradePath.HORIZONTAL_STRIPES &&
+        other.gridPosition.row === frog.gridPosition.row) {
+        const buffs = UPGRADE_PATH_BUFFS[UpgradePath.HORIZONTAL_STRIPES];
+        damage += buffs.damageBonus![otherState.level - 1];
+        attackSpeed += buffs.attackSpeedBonus![otherState.level - 1];
+      }
+
+      if (otherState.path === UpgradePath.VERTICAL_STRIPES &&
+        other.gridPosition.col === frog.gridPosition.col) {
+        const buffs = UPGRADE_PATH_BUFFS[UpgradePath.VERTICAL_STRIPES];
+        damage += buffs.damageBonus![otherState.level - 1];
+        attackSpeed += buffs.attackSpeedBonus![otherState.level - 1];
       }
     });
 
-    return available;
+    return { damage, attackSpeed, range };
+  }
+
+  getAvailablePaths(frog: FrogData): UpgradePath[] {
+    const state = frog.upgradeState;
+
+    // Already maxed
+    if (state.level >= 3) return [];
+
+    // Already committed to a path
+    if (state.path !== UpgradePath.NONE) return [state.path];
+
+    // All three available
+    return [UpgradePath.SPOTS, UpgradePath.HORIZONTAL_STRIPES, UpgradePath.VERTICAL_STRIPES];
   }
 }

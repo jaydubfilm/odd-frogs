@@ -1,7 +1,8 @@
-﻿import { FrogData, FrogType, GridPosition, FoodData, GridCell } from '../../types/game';
-import { FROG_STATS, GAME_CONFIG, UPGRADE_MULTIPLIER } from '@data/constants';
+import { FrogData, FrogType, GridPosition, FoodData, GridCell } from '../../types/game';
+import { UpgradePath } from '../../types/upgrades';
+import { FROG_STATS, GAME_CONFIG } from '@data/constants';
 import { AudioManager } from './AudioManager';
-import { createDefaultUpgradeTree } from '../../data/UpgradeTrees';
+import { UpgradeSystem } from './UpgradeSystem';
 
 export class FrogSystem {
   private frogIdCounter = 0;
@@ -18,23 +19,24 @@ export class FrogSystem {
       id: `frog-${this.frogIdCounter++}`,
       type,
       gridPosition,
-      level: 1,
       stats: baseStats,
       lastAttackTime: 0,
       targetFood: null,
       totalSpent: 0,
       upgradeState: {
-        tree: createDefaultUpgradeTree(),
-        totalSpent: 0
+        path: UpgradePath.NONE,
+        level: 0,
+        totalSpent: 0,
       },
     };
   }
- 
-  
+
+
   private findTargetInRange(
     frog: FrogData,
     foods: Map<string, FoodData>,
-    grid: GridCell[][]
+    grid: GridCell[][],
+    effectiveRange: number
   ): FoodData | null {
     const cell = grid[frog.gridPosition.row]?.[frog.gridPosition.col];
     if (!cell) return null;
@@ -50,7 +52,7 @@ export class FrogSystem {
       }
 
       const distance = this.getDistance(frogPos, food.position);
-      const rangeInPixels = frog.stats.range * GAME_CONFIG.cellSize;
+      const rangeInPixels = effectiveRange * GAME_CONFIG.cellSize;
 
       // Only consider food within range
       if (distance <= rangeInPixels) {
@@ -93,9 +95,9 @@ export class FrogSystem {
 
     return false;
   }
-  
-  private attackFood(frog: FrogData, food: FoodData): void {
-    food.currentHealth -= frog.stats.damage;
+
+  private attackFood(frog: FrogData, food: FoodData, effectiveDamage: number): void {
+    food.currentHealth -= effectiveDamage;
     if (food.currentHealth < 0) {
       food.currentHealth = 0;
     }
@@ -113,16 +115,6 @@ export class FrogSystem {
     }
   }
 
-  upgradeFrog(frog: FrogData): void {
-    frog.level++;
-
-    // Apply upgrade multipliers
-    frog.stats.damage *= UPGRADE_MULTIPLIER.DAMAGE;
-    frog.stats.attackSpeed *= UPGRADE_MULTIPLIER.ATTACK_SPEED;
-    frog.stats.range *= UPGRADE_MULTIPLIER.RANGE;
-    frog.stats.upgradeCost = Math.floor(frog.stats.upgradeCost * 1.5);
-  }
-  
   private pixelToGrid(x: number, y: number): GridPosition | null {
     const topMargin = 60;
     const leftMargin = 60;
@@ -136,7 +128,7 @@ export class FrogSystem {
 
     return null;
   }
-  
+
   private getDistance(pos1: { x: number; y: number }, pos2: { x: number; y: number }): number {
     const dx = pos2.x - pos1.x;
     const dy = pos2.y - pos1.y;
@@ -147,25 +139,29 @@ export class FrogSystem {
     frogs: Map<string, FrogData>,
     foods: Map<string, FoodData>,
     grid: GridCell[][],
-    _deltaTime: number
+    _deltaTime: number,
+    upgradeSystem: UpgradeSystem
   ): void {
     const currentTime = performance.now() / 1000;
 
     frogs.forEach(frog => {
       // Update tongue animation
-      this.updateTongue(frog, currentTime);  // ← ADD THIS LINE
+      this.updateTongue(frog, currentTime);
 
-      // Find target in range
-      const target = this.findTargetInRange(frog, foods, grid);
+      // Compute effective stats with upgrade buffs
+      const effective = upgradeSystem.getEffectiveStats(frog, frogs);
+
+      // Find target in range using effective range
+      const target = this.findTargetInRange(frog, foods, grid, effective.range);
 
       if (target) {
         frog.targetFood = target.id;
 
         const timeSinceLastAttack = currentTime - frog.lastAttackTime;
-        const attackInterval = 1 / frog.stats.attackSpeed;
+        const attackInterval = 1 / effective.attackSpeed;
 
         if (timeSinceLastAttack >= attackInterval) {
-          this.attackFood(frog, target);
+          this.attackFood(frog, target, effective.damage);
           frog.lastAttackTime = currentTime;
         }
       } else {
@@ -174,7 +170,6 @@ export class FrogSystem {
     });
   }
 
-  // ← ADD THIS NEW METHOD
   private updateTongue(frog: FrogData, currentTime: number): void {
     if (!frog.tongue || !frog.tongue.active) return;
 

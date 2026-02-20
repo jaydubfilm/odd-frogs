@@ -1,4 +1,5 @@
 import { FrogType, FrogStats, FoodType, FoodStats, GameConfig } from '../types/game';
+import { UpgradePath } from '../types/upgrades';
 
 
 export const GAME_CONFIG: GameConfig = {
@@ -17,7 +18,6 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     attackSpeed: 1.5,
     range: 999,
     cost: 10,
-    upgradeCost: 15,
     color: '#E74C3C',
   },
   [FrogType.BLUE]: {
@@ -25,7 +25,6 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     attackSpeed: 3,
     range: 999,
     cost: 10,
-    upgradeCost: 18,
     color: '#3498DB',
   },
   [FrogType.GREEN]: {
@@ -33,7 +32,6 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     attackSpeed: 1.5,
     range: 999,
     cost: 15,
-    upgradeCost: 20,
     color: '#2ECC71',
   },
   [FrogType.YELLOW]: {
@@ -41,7 +39,6 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     attackSpeed: 2,
     range: 2.5,
     cost: 18,
-    upgradeCost: 25,
     color: '#F39C12',
   },
   [FrogType.PURPLE]: {
@@ -49,7 +46,6 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     attackSpeed: 0.5,
     range: 1.5,
     cost: 20,
-    upgradeCost: 30,
     color: '#9B59B6',
   },
 };
@@ -77,8 +73,25 @@ export const COLORS = {
   HEALTH_BAR_DAMAGED: '#FF0000',
 };
 
-export const UPGRADE_MULTIPLIER = {
-  DAMAGE: 1.5,
-  ATTACK_SPEED: 1.2,
-  RANGE: 1.1,
+export const UPGRADE_PATH_COSTS = [5, 10, 15]; // Cost for levels 1, 2, 3
+
+export const UPGRADE_PATH_BUFFS: Record<UpgradePath, {
+  damageMult?: number[];
+  attackSpeedMult?: number[];
+  damageBonus?: number[];
+  attackSpeedBonus?: number[];
+}> = {
+  [UpgradePath.NONE]: {},
+  [UpgradePath.SPOTS]: {
+    damageMult: [1.4, 1.8, 2.5],
+    attackSpeedMult: [1.2, 1.4, 1.7],
+  },
+  [UpgradePath.HORIZONTAL_STRIPES]: {
+    damageBonus: [3, 6, 10],
+    attackSpeedBonus: [0.3, 0.6, 1.0],
+  },
+  [UpgradePath.VERTICAL_STRIPES]: {
+    damageBonus: [3, 6, 10],
+    attackSpeedBonus: [0.3, 0.6, 1.0],
+  },
 };

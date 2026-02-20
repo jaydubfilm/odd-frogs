@@ -1,5 +1,7 @@
-﻿import { GridCell, FrogData, FoodData, FoodType, FloatingText, GameState, StreamPath, CellType, GridPosition } from '../../types/game';
-import { COLORS, GAME_CONFIG } from '@data/constants';
+import { GridCell, FrogData, FoodData, FoodType, FloatingText, GameState, StreamPath, CellType, GridPosition } from '../../types/game';
+import { UpgradePath } from '../../types/upgrades';
+import { COLORS, GAME_CONFIG, UPGRADE_PATH_COSTS } from '@data/constants';
+import { UpgradeSystem } from './UpgradeSystem';
 
 export class Renderer {
   private hasLoggedStreams = false;
@@ -36,7 +38,7 @@ export class Renderer {
       this.ctx.lineCap = 'round';
       this.ctx.lineJoin = 'round';
 
-      // Soft current — low opacity, no hard edges
+      // Soft current
       this.ctx.globalAlpha = 0.5;
       this.ctx.strokeStyle = COLORS.STREAM;
       this.ctx.lineWidth = 18;
@@ -52,7 +54,7 @@ export class Renderer {
       tracePath();
       this.ctx.stroke();
 
-      // Shimmer highlights (faster, thinner)
+      // Shimmer highlights
       this.ctx.globalAlpha = 0.3;
       this.ctx.strokeStyle = 'rgba(220, 240, 255, 1)';
       this.ctx.lineWidth = 6;
@@ -65,16 +67,11 @@ export class Renderer {
     });
   }
 
-  // =========================================================
-  //    EXISTING RENDER METHODS (Unchanged)
-  // =========================================================
-
   renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number, dropHighlightCell?: GridPosition | null, menuOpacity: number = 1): void {
     grid.forEach(row => {
       row.forEach(cell => {
         this.renderCell(cell);
 
-        // Drop highlight for drag-and-drop
         if (dropHighlightCell &&
           cell.gridPosition.row === dropHighlightCell.row &&
           cell.gridPosition.col === dropHighlightCell.col &&
@@ -83,7 +80,6 @@ export class Renderer {
           this.renderDropHighlight(cell);
         }
 
-        // Show lily removal tooltip if hovering over lily pad with lily
         if (hoveredCell &&
           cell.gridPosition.row === hoveredCell.row &&
           cell.gridPosition.col === hoveredCell.col &&
@@ -188,7 +184,14 @@ export class Renderer {
     });
   }
 
-  renderFrogUpgradeUI(selectedFrogId: string | null, frogs: Map<string, FrogData>, grid: GridCell[][], money: number, menuOpacity: number = 1): void {
+  renderFrogUpgradeUI(
+    selectedFrogId: string | null,
+    frogs: Map<string, FrogData>,
+    grid: GridCell[][],
+    money: number,
+    menuOpacity: number = 1,
+    upgradeSystem?: UpgradeSystem
+  ): void {
     if (!selectedFrogId) return;
 
     const frog = frogs.get(selectedFrogId);
@@ -200,50 +203,74 @@ export class Renderer {
     const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
     const pos = cell.position;
     const buttonSize = 60;
-    const buttonY = pos.y - 50 - buttonSize; // Above the frog
-    const isMaxLevel = frog.level >= 3;
+    const btnGap = 16;
+    const level = frog.upgradeState.level;
     const sellValue = Math.floor((frog.stats.cost + frog.totalSpent) / 2);
 
-    if (isMaxLevel) {
-      // Only show sell button, centered
-      const sellButtonX = pos.x - buttonSize / 2;
+    if (level === 0) {
+      // Level 0: show 3 path buttons + sell
+      const totalWidth = buttonSize * 3 + btnGap * 2;
+      const startX = pos.x - totalWidth / 2;
+      const pathButtonY = pos.y - 50 - buttonSize * 2 - btnGap;
+      const sellButtonY = pos.y - 50 - buttonSize;
 
-      this.ctx.fillStyle = '#E74C3C';
-      this.roundRect(sellButtonX, buttonY, buttonSize, buttonSize, 8);
-      this.ctx.fill();
+      // Path buttons: V-Stripes, Spots, H-Stripes
+      const pathLabels = ['V', 'S', 'H'];
+      const pathColors = ['#3498DB', '#E67E22', '#27AE60'];
+      const paths = [UpgradePath.VERTICAL_STRIPES, UpgradePath.SPOTS, UpgradePath.HORIZONTAL_STRIPES];
+      const cost = UPGRADE_PATH_COSTS[0];
+      const canAfford = money >= cost;
 
-      this.ctx.strokeStyle = '#C0392B';
-      this.ctx.lineWidth = 2;
-      this.roundRect(sellButtonX, buttonY, buttonSize, buttonSize, 8);
-      this.ctx.stroke();
+      for (let i = 0; i < 3; i++) {
+        const btnX = startX + i * (buttonSize + btnGap);
 
-      // Sell label
-      this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 16px Arial';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('$', sellButtonX + buttonSize / 2, buttonY + 20);
+        this.ctx.fillStyle = canAfford ? pathColors[i] : '#888';
+        this.roundRect(btnX, pathButtonY, buttonSize, buttonSize, 8);
+        this.ctx.fill();
 
-      // Sell value
-      this.ctx.font = 'bold 20px Arial';
-      this.drawCoinText(`${sellValue}`, sellButtonX + buttonSize / 2, buttonY + 44, 8);
-    } else {
-      // Show both upgrade and sell buttons
-      const gap = 16;
-      const upgradeButtonX = pos.x - buttonSize - gap / 2;
-      const canUpgrade = money >= frog.stats.upgradeCost;
+        this.ctx.strokeStyle = canAfford ? this.darkenColor(pathColors[i], 0.2) : '#666';
+        this.ctx.lineWidth = 2;
+        this.roundRect(btnX, pathButtonY, buttonSize, buttonSize, 8);
+        this.ctx.stroke();
 
-      // Upgrade button (left)
-      this.ctx.fillStyle = canUpgrade ? '#4CAF50' : '#888';
+        // Draw path icon preview
+        const iconCx = btnX + buttonSize / 2;
+        const iconCy = pathButtonY + 22;
+        const iconR = 12;
+        this.ctx.save();
+        this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
+        this.drawPathIcon(paths[i], iconCx, iconCy, iconR);
+        this.ctx.restore();
+
+        // Cost text
+        this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
+        this.ctx.font = 'bold 16px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.drawCoinText(`${cost}`, iconCx, pathButtonY + 48, 6);
+      }
+
+      // Sell button (centered below)
+      const sellBtnX = pos.x - buttonSize / 2;
+      this.renderSellButton(sellBtnX, sellButtonY, buttonSize, sellValue);
+    } else if (level < 3) {
+      // Level 1-2: upgrade button (left) + sell button (right)
+      const buttonY = pos.y - 50 - buttonSize;
+      const upgradeButtonX = pos.x - buttonSize - btnGap / 2;
+      const cost = UPGRADE_PATH_COSTS[level];
+      const canAfford = money >= cost;
+
+      // Upgrade button
+      this.ctx.fillStyle = canAfford ? '#4CAF50' : '#888';
       this.roundRect(upgradeButtonX, buttonY, buttonSize, buttonSize, 8);
       this.ctx.fill();
 
-      this.ctx.strokeStyle = canUpgrade ? '#45a049' : '#666';
+      this.ctx.strokeStyle = canAfford ? '#45a049' : '#666';
       this.ctx.lineWidth = 2;
       this.roundRect(upgradeButtonX, buttonY, buttonSize, buttonSize, 8);
       this.ctx.stroke();
 
-      // Small up arrow
+      // Up arrow
       this.ctx.fillStyle = 'white';
       const cx = upgradeButtonX + buttonSize / 2;
       this.ctx.beginPath();
@@ -258,38 +285,82 @@ export class Renderer {
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       this.ctx.fillStyle = 'white';
-      this.drawCoinText(`${frog.stats.upgradeCost}`, cx, buttonY + 42, 8);
+      this.drawCoinText(`${cost}`, cx, buttonY + 42, 8);
 
       // Sell button (right)
-      const sellButtonX = pos.x + gap / 2;
-
-      this.ctx.fillStyle = '#E74C3C';
-      this.roundRect(sellButtonX, buttonY, buttonSize, buttonSize, 8);
-      this.ctx.fill();
-
-      this.ctx.strokeStyle = '#C0392B';
-      this.ctx.lineWidth = 2;
-      this.roundRect(sellButtonX, buttonY, buttonSize, buttonSize, 8);
-      this.ctx.stroke();
-
-      // Sell label
-      this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 14px Arial';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('$', sellButtonX + buttonSize / 2, buttonY + 18);
-
-      // Sell value
-      this.ctx.font = 'bold 20px Arial';
-      this.drawCoinText(`${sellValue}`, sellButtonX + buttonSize / 2, buttonY + 42, 8);
+      const sellButtonX = pos.x + btnGap / 2;
+      this.renderSellButton(sellButtonX, buttonY, buttonSize, sellValue);
+    } else {
+      // Level 3: sell only (centered)
+      const buttonY = pos.y - 50 - buttonSize;
+      const sellButtonX = pos.x - buttonSize / 2;
+      this.renderSellButton(sellButtonX, buttonY, buttonSize, sellValue);
     }
 
     this.ctx.restore();
   }
 
+  private drawPathIcon(path: UpgradePath, cx: number, cy: number, r: number): void {
+    this.ctx.save();
+    if (path === UpgradePath.SPOTS) {
+      // Draw 3 small circles
+      this.ctx.beginPath();
+      this.ctx.arc(cx - r * 0.5, cy - r * 0.3, r * 0.25, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.beginPath();
+      this.ctx.arc(cx + r * 0.4, cy - r * 0.2, r * 0.3, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.beginPath();
+      this.ctx.arc(cx, cy + r * 0.4, r * 0.28, 0, Math.PI * 2);
+      this.ctx.fill();
+    } else if (path === UpgradePath.HORIZONTAL_STRIPES) {
+      // Draw horizontal lines
+      this.ctx.strokeStyle = this.ctx.fillStyle as string;
+      this.ctx.lineWidth = 2.5;
+      for (let i = -1; i <= 1; i++) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(cx - r * 0.7, cy + i * r * 0.45);
+        this.ctx.lineTo(cx + r * 0.7, cy + i * r * 0.45);
+        this.ctx.stroke();
+      }
+    } else if (path === UpgradePath.VERTICAL_STRIPES) {
+      // Draw vertical lines
+      this.ctx.strokeStyle = this.ctx.fillStyle as string;
+      this.ctx.lineWidth = 2.5;
+      for (let i = -1; i <= 1; i++) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(cx + i * r * 0.45, cy - r * 0.7);
+        this.ctx.lineTo(cx + i * r * 0.45, cy + r * 0.7);
+        this.ctx.stroke();
+      }
+    }
+    this.ctx.restore();
+  }
+
+  private renderSellButton(x: number, y: number, size: number, sellValue: number): void {
+    this.ctx.fillStyle = '#E74C3C';
+    this.roundRect(x, y, size, size, 8);
+    this.ctx.fill();
+
+    this.ctx.strokeStyle = '#C0392B';
+    this.ctx.lineWidth = 2;
+    this.roundRect(x, y, size, size, 8);
+    this.ctx.stroke();
+
+    // Sell label
+    this.ctx.fillStyle = 'white';
+    this.ctx.font = 'bold 16px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('$', x + size / 2, y + 20);
+
+    // Sell value
+    this.ctx.font = 'bold 20px Arial';
+    this.drawCoinText(`${sellValue}`, x + size / 2, y + 44, 8);
+  }
+
   private drawCoin(cx: number, cy: number, radius: number): void {
     this.ctx.save();
-    // Outer circle
     this.ctx.beginPath();
     this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     this.ctx.fillStyle = '#FFD700';
@@ -297,13 +368,11 @@ export class Renderer {
     this.ctx.strokeStyle = '#B8860B';
     this.ctx.lineWidth = radius * 0.15;
     this.ctx.stroke();
-    // Inner ring
     this.ctx.beginPath();
     this.ctx.arc(cx, cy, radius * 0.6, 0, Math.PI * 2);
     this.ctx.strokeStyle = '#DAA520';
     this.ctx.lineWidth = radius * 0.1;
     this.ctx.stroke();
-    // Highlight
     this.ctx.beginPath();
     this.ctx.ellipse(cx - radius * 0.2, cy - radius * 0.3, radius * 0.3, radius * 0.2, 0, 0, Math.PI * 2);
     this.ctx.fillStyle = 'rgba(255, 248, 220, 0.4)';
@@ -337,7 +406,7 @@ export class Renderer {
     const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
     const pos = cell.position;
 
-    const size = GAME_CONFIG.cellSize * 0.5 * 0.9;  // ← Multiply by 0.9 for 10% smaller
+    const size = GAME_CONFIG.cellSize * 0.5 * 0.9;
 
     if (frog.tongue && frog.tongue.active) {
       this.renderTongue(pos, frog.tongue);
@@ -349,21 +418,16 @@ export class Renderer {
     this.ctx.arc(pos.x, pos.y, size / 2, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Spots — seeded from frog ID for stable random positions
-    this.ctx.fillStyle = this.darkenColor(frog.stats.color, 0.35);
+    // Draw pattern based on upgrade path
     const bodyR = size / 2;
-    let seed = this.hashString(frog.id);
-    const spotCount = 2 + (seed % 5); // 2-6 spots
-    for (let i = 0; i < spotCount; i++) {
-      seed = this.nextSeed(seed);
-      const angle = (seed % 1000) / 1000 * Math.PI * 2;
-      seed = this.nextSeed(seed);
-      const dist = ((seed % 1000) / 1000) * 0.6 * bodyR;
-      seed = this.nextSeed(seed);
-      const spotR = size * 0.04 + ((seed % 1000) / 1000) * size * 0.04;
-      this.ctx.beginPath();
-      this.ctx.arc(pos.x + Math.cos(angle) * dist, pos.y + Math.sin(angle) * dist, spotR, 0, Math.PI * 2);
-      this.ctx.fill();
+    const state = frog.upgradeState;
+
+    if (state.path === UpgradePath.SPOTS && state.level > 0) {
+      this.renderSpots(pos.x, pos.y, bodyR, state.level, frog.stats.color);
+    } else if (state.path === UpgradePath.HORIZONTAL_STRIPES && state.level > 0) {
+      this.renderHorizontalStripes(pos.x, pos.y, bodyR, state.level, frog.stats.color);
+    } else if (state.path === UpgradePath.VERTICAL_STRIPES && state.level > 0) {
+      this.renderVerticalStripes(pos.x, pos.y, bodyR, state.level, frog.stats.color);
     }
 
     // Eyes
@@ -380,12 +444,96 @@ export class Renderer {
     this.ctx.arc(pos.x + size / 4, pos.y - size / 4, size / 12, 0, Math.PI * 2);
     this.ctx.fill();
 
-    if (frog.level > 1) {
+    // Path+level label (e.g. "S2", "H3") instead of old "Lv2"
+    if (state.level > 0) {
+      let prefix = '';
+      switch (state.path) {
+        case UpgradePath.SPOTS: prefix = 'S'; break;
+        case UpgradePath.HORIZONTAL_STRIPES: prefix = 'H'; break;
+        case UpgradePath.VERTICAL_STRIPES: prefix = 'V'; break;
+      }
       this.ctx.fillStyle = 'gold';
       this.ctx.font = 'bold 12px Arial';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText(`Lv${frog.level}`, pos.x, pos.y + size / 2 + 12);
+      this.ctx.fillText(`${prefix}${state.level}`, pos.x, pos.y + size / 2 + 12);
     }
+  }
+
+  private renderSpots(cx: number, cy: number, bodyR: number, level: number, baseColor: string): void {
+    const spotCounts = [3, 5, 7];
+    const spotSizeBase = [0.08, 0.09, 0.10];
+    const count = spotCounts[level - 1];
+    const sizeScale = spotSizeBase[level - 1];
+
+    this.ctx.save();
+    // Clip to body circle
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, bodyR, 0, Math.PI * 2);
+    this.ctx.clip();
+
+    this.ctx.fillStyle = this.darkenColor(baseColor, 0.35);
+
+    // Use deterministic placement based on index
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + 0.5;
+      const dist = bodyR * (0.3 + (i % 3) * 0.15);
+      const spotR = bodyR * sizeScale + (i % 2) * bodyR * 0.03;
+      this.ctx.beginPath();
+      this.ctx.arc(cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist, spotR, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
+    this.ctx.restore();
+  }
+
+  private renderHorizontalStripes(cx: number, cy: number, bodyR: number, level: number, baseColor: string): void {
+    const stripeCounts = [2, 3, 4];
+    const count = stripeCounts[level - 1];
+
+    this.ctx.save();
+    // Clip to body circle
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, bodyR, 0, Math.PI * 2);
+    this.ctx.clip();
+
+    this.ctx.strokeStyle = this.darkenColor(baseColor, 0.35);
+    this.ctx.lineWidth = 3;
+
+    const spacing = (bodyR * 2) / (count + 1);
+    for (let i = 1; i <= count; i++) {
+      const lineY = cy - bodyR + spacing * i;
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx - bodyR, lineY);
+      this.ctx.lineTo(cx + bodyR, lineY);
+      this.ctx.stroke();
+    }
+
+    this.ctx.restore();
+  }
+
+  private renderVerticalStripes(cx: number, cy: number, bodyR: number, level: number, baseColor: string): void {
+    const stripeCounts = [2, 3, 4];
+    const count = stripeCounts[level - 1];
+
+    this.ctx.save();
+    // Clip to body circle
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, bodyR, 0, Math.PI * 2);
+    this.ctx.clip();
+
+    this.ctx.strokeStyle = this.darkenColor(baseColor, 0.35);
+    this.ctx.lineWidth = 3;
+
+    const spacing = (bodyR * 2) / (count + 1);
+    for (let i = 1; i <= count; i++) {
+      const lineX = cx - bodyR + spacing * i;
+      this.ctx.beginPath();
+      this.ctx.moveTo(lineX, cy - bodyR);
+      this.ctx.lineTo(lineX, cy + bodyR);
+      this.ctx.stroke();
+    }
+
+    this.ctx.restore();
   }
 
   private renderTongue(
@@ -395,9 +543,8 @@ export class Renderer {
     const currentX = frogPos.x + (tongue.targetPosition.x - frogPos.x) * tongue.progress;
     const currentY = frogPos.y + (tongue.targetPosition.y - frogPos.y) * tongue.progress;
 
-    // Draw tongue line
     this.ctx.strokeStyle = '#FF69B4';
-    this.ctx.lineWidth = 4;  // ← Slightly thicker
+    this.ctx.lineWidth = 4;
     this.ctx.lineCap = 'round';
 
     this.ctx.beginPath();
@@ -405,14 +552,12 @@ export class Renderer {
     this.ctx.lineTo(currentX, currentY);
     this.ctx.stroke();
 
-    // Draw tongue tip (only if extended past a certain threshold)
-    if (tongue.progress > 0.1) {  // ← Only draw tip when tongue is visible
+    if (tongue.progress > 0.1) {
       this.ctx.fillStyle = '#FF1493';
       this.ctx.beginPath();
-      this.ctx.arc(currentX, currentY, 5, 0, Math.PI * 2);  // ← Slightly larger
+      this.ctx.arc(currentX, currentY, 5, 0, Math.PI * 2);
       this.ctx.fill();
 
-      // Add a white highlight for clarity
       this.ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
       this.ctx.beginPath();
       this.ctx.arc(currentX - 1, currentY - 1, 2, 0, Math.PI * 2);
@@ -443,7 +588,6 @@ export class Renderer {
 
     switch (type) {
       case 'APPLE': {
-        // Red apple body
         this.ctx.fillStyle = '#E53935';
         this.ctx.beginPath();
         this.ctx.arc(x, y + 2, r, 0, Math.PI * 2);
@@ -451,14 +595,12 @@ export class Renderer {
         this.ctx.strokeStyle = '#B71C1C';
         this.ctx.lineWidth = 1.5;
         this.ctx.stroke();
-        // Stem
         this.ctx.strokeStyle = '#5D4037';
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         this.ctx.moveTo(x, y - r + 2);
         this.ctx.lineTo(x + 1, y - r - 5);
         this.ctx.stroke();
-        // Leaf
         this.ctx.fillStyle = '#43A047';
         this.ctx.beginPath();
         this.ctx.ellipse(x + 5, y - r - 2, 5, 3, 0.3, 0, Math.PI * 2);
@@ -467,23 +609,18 @@ export class Renderer {
       }
       case 'BURGER': {
         const bw = r * 1.3;
-        // Bottom bun
         this.ctx.fillStyle = '#D4A056';
         this.ctx.beginPath();
         this.ctx.ellipse(x, y + 5, bw, r * 0.4, 0, 0, Math.PI);
         this.ctx.fill();
-        // Patty
         this.ctx.fillStyle = '#5D4037';
         this.ctx.fillRect(x - bw + 2, y - 2, (bw - 2) * 2, 7);
-        // Lettuce
         this.ctx.fillStyle = '#66BB6A';
         this.ctx.fillRect(x - bw + 1, y - 5, (bw - 1) * 2, 4);
-        // Top bun
         this.ctx.fillStyle = '#E8A642';
         this.ctx.beginPath();
         this.ctx.ellipse(x, y - 5, bw, r * 0.55, 0, Math.PI, Math.PI * 2);
         this.ctx.fill();
-        // Sesame seeds
         this.ctx.fillStyle = '#FFF9C4';
         this.ctx.beginPath();
         this.ctx.ellipse(x - 4, y - 9, 2, 1.2, 0, 0, Math.PI * 2);
@@ -491,7 +628,6 @@ export class Renderer {
         this.ctx.beginPath();
         this.ctx.ellipse(x + 5, y - 8, 2, 1.2, 0.3, 0, Math.PI * 2);
         this.ctx.fill();
-        // Outline
         this.ctx.strokeStyle = '#6D4C00';
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
@@ -500,50 +636,39 @@ export class Renderer {
         break;
       }
       case 'CAKE': {
-        // Cake body
         this.ctx.fillStyle = '#FFCCBC';
         this.ctx.fillRect(x - r, y - r * 0.3, r * 2, r * 1.3);
-        // Frosting top
         this.ctx.fillStyle = '#F48FB1';
         this.ctx.fillRect(x - r, y - r * 0.5, r * 2, r * 0.4);
-        // Frosting drip
         this.ctx.beginPath();
         this.ctx.arc(x - r * 0.4, y - r * 0.1, 3, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.beginPath();
         this.ctx.arc(x + r * 0.5, y - r * 0.05, 2.5, 0, Math.PI * 2);
         this.ctx.fill();
-        // Cherry on top
         this.ctx.fillStyle = '#E53935';
         this.ctx.beginPath();
         this.ctx.arc(x, y - r * 0.65, 4, 0, Math.PI * 2);
         this.ctx.fill();
-        // Outline
         this.ctx.strokeStyle = '#8D6E63';
         this.ctx.lineWidth = 1;
         this.ctx.strokeRect(x - r, y - r * 0.5, r * 2, r * 1.5);
         break;
       }
       case 'BEANS': {
-        // Can body
         this.ctx.fillStyle = '#A1887F';
         this.ctx.fillRect(x - r * 0.6, y - r * 0.8, r * 1.2, r * 1.6);
-        // Label
         this.ctx.fillStyle = '#FF8A65';
         this.ctx.fillRect(x - r * 0.55, y - r * 0.4, r * 1.1, r * 0.9);
-        // Can top rim
         this.ctx.fillStyle = '#BDBDBD';
         this.ctx.fillRect(x - r * 0.65, y - r * 0.85, r * 1.3, r * 0.15);
-        // Can bottom rim
         this.ctx.fillRect(x - r * 0.65, y + r * 0.75, r * 1.3, r * 0.12);
-        // Outline
         this.ctx.strokeStyle = '#5D4037';
         this.ctx.lineWidth = 1;
         this.ctx.strokeRect(x - r * 0.6, y - r * 0.8, r * 1.2, r * 1.6);
         break;
       }
       case 'PIZZA': {
-        // Triangle slice
         this.ctx.fillStyle = '#FDD835';
         this.ctx.beginPath();
         this.ctx.moveTo(x, y - r);
@@ -551,7 +676,6 @@ export class Renderer {
         this.ctx.lineTo(x + r, y + r * 0.7);
         this.ctx.closePath();
         this.ctx.fill();
-        // Crust
         this.ctx.fillStyle = '#D4A056';
         this.ctx.beginPath();
         this.ctx.moveTo(x - r, y + r * 0.7);
@@ -560,7 +684,6 @@ export class Renderer {
         this.ctx.lineTo(x - r * 0.85, y + r * 0.95);
         this.ctx.closePath();
         this.ctx.fill();
-        // Pepperoni
         this.ctx.fillStyle = '#C62828';
         this.ctx.beginPath();
         this.ctx.arc(x - 3, y, 3.5, 0, Math.PI * 2);
@@ -571,7 +694,6 @@ export class Renderer {
         this.ctx.beginPath();
         this.ctx.arc(x, y - r * 0.4, 2.5, 0, Math.PI * 2);
         this.ctx.fill();
-        // Outline
         this.ctx.strokeStyle = '#BF360C';
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
@@ -583,12 +705,10 @@ export class Renderer {
         break;
       }
       case 'DONUT': {
-        // Outer ring
         this.ctx.fillStyle = '#D4A056';
         this.ctx.beginPath();
         this.ctx.arc(x, y, r, 0, Math.PI * 2);
         this.ctx.fill();
-        // Frosting
         this.ctx.fillStyle = '#F48FB1';
         this.ctx.beginPath();
         this.ctx.arc(x, y, r * 0.9, Math.PI, Math.PI * 2);
@@ -596,19 +716,16 @@ export class Renderer {
         this.ctx.arc(x, y + 2, r * 0.9, 0, Math.PI);
         this.ctx.closePath();
         this.ctx.fill();
-        // Hole
         this.ctx.fillStyle = '#87CEEB';
         this.ctx.beginPath();
         this.ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
         this.ctx.fill();
-        // Sprinkles
         this.ctx.fillStyle = '#FFF176';
         this.ctx.fillRect(x - 6, y - 5, 4, 2);
         this.ctx.fillStyle = '#4FC3F7';
         this.ctx.fillRect(x + 3, y - 3, 4, 2);
         this.ctx.fillStyle = '#E53935';
         this.ctx.fillRect(x - 2, y + 3, 4, 2);
-        // Outline
         this.ctx.strokeStyle = '#8D6E63';
         this.ctx.lineWidth = 1.5;
         this.ctx.beginPath();
@@ -620,7 +737,6 @@ export class Renderer {
         break;
       }
       case 'CHERRY': {
-        // Two cherries
         this.ctx.fillStyle = '#C62828';
         this.ctx.beginPath();
         this.ctx.arc(x - 4, y + 2, r * 0.7, 0, Math.PI * 2);
@@ -628,7 +744,6 @@ export class Renderer {
         this.ctx.beginPath();
         this.ctx.arc(x + 4, y + 2, r * 0.7, 0, Math.PI * 2);
         this.ctx.fill();
-        // Stems
         this.ctx.strokeStyle = '#33691E';
         this.ctx.lineWidth = 1.5;
         this.ctx.beginPath();
@@ -639,7 +754,6 @@ export class Renderer {
         this.ctx.moveTo(x + 4, y - r * 0.4);
         this.ctx.quadraticCurveTo(x + 1, y - r - 2, x + 1, y - r - 4);
         this.ctx.stroke();
-        // Highlight
         this.ctx.fillStyle = 'rgba(255,255,255,0.3)';
         this.ctx.beginPath();
         this.ctx.arc(x - 5, y, 2, 0, Math.PI * 2);
@@ -657,9 +771,9 @@ export class Renderer {
   private getFoodSizeMultiplier(type: FoodType): number {
     switch (type) {
       case 'DONUT':
-        return 1.5;  // 50% bigger
+        return 1.5;
       case 'CHERRY':
-        return 0.6;  // 40% smaller
+        return 0.6;
       default:
         return 1.0;
     }
@@ -691,12 +805,12 @@ export class Renderer {
     const timeRemaining = waveSystem.getTimeUntilNextWave(currentTime);
     const isLastWave = gameState.wave >= totalWaves;
 
-    // Show "Call Next Wave" button (only if not last wave and not victory)
+    // Show "Call Next Wave" button
     if (waveSystem.canCallNextWave(currentTime, foods) && !gameState.isVictory && !isLastWave) {
       const btnSize = 60;
       const gap = 5;
       const callButtonX = isLeft ? 5 : GAME_CONFIG.canvasWidth - btnSize - 5;
-      const callButtonY = 5 + (btnSize + gap) * 2; // Third in the stack
+      const callButtonY = 5 + (btnSize + gap) * 2;
       const cx = callButtonX + btnSize / 2;
       const cy = callButtonY + btnSize / 2;
 
@@ -709,7 +823,6 @@ export class Renderer {
       this.roundRect(callButtonX, callButtonY, btnSize, btnSize, 6);
       this.ctx.stroke();
 
-      // Up arrow icon (top half)
       this.ctx.fillStyle = 'white';
       this.ctx.beginPath();
       this.ctx.moveTo(cx, cy - 16);
@@ -719,7 +832,6 @@ export class Renderer {
       this.ctx.fill();
       this.ctx.fillRect(cx - 3, cy - 8, 6, 10);
 
-      // Thumbs up icon (bottom half)
       this.ctx.font = 'bold 18px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
@@ -736,7 +848,6 @@ export class Renderer {
       this.ctx.textAlign = 'center';
       this.ctx.fillText('PAUSED', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 - 30);
 
-      // Resume button
       const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
       const buttonY = GAME_CONFIG.canvasHeight / 2 + 20;
       const buttonWidth = 150;
@@ -754,16 +865,16 @@ export class Renderer {
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText('RESUME', GAME_CONFIG.canvasWidth / 2, buttonY + buttonHeight / 2);
 
-      return; // Don't render other UI elements
+      return;
     }
 
-    // Speed and Pause buttons (stacked vertically)
+    // Speed and Pause buttons
     if (!gameState.isGameOver && !gameState.isVictory) {
       const buttonSize = 60;
       const gap = 5;
       const baseX = isLeft ? 5 : GAME_CONFIG.canvasWidth - buttonSize - 5;
 
-      // Pause button (top of stack)
+      // Pause button
       const pauseButtonX = baseX;
       const pauseButtonY = 5;
 
@@ -779,7 +890,6 @@ export class Renderer {
       this.ctx.fillStyle = 'white';
 
       if (gameState.isPaused) {
-        // Draw play triangle
         this.ctx.beginPath();
         this.ctx.moveTo(pauseButtonX + buttonSize / 2 - 9, pauseButtonY + buttonSize / 2 - 12);
         this.ctx.lineTo(pauseButtonX + buttonSize / 2 - 9, pauseButtonY + buttonSize / 2 + 12);
@@ -787,12 +897,11 @@ export class Renderer {
         this.ctx.closePath();
         this.ctx.fill();
       } else {
-        // Draw pause bars
         this.ctx.fillRect(pauseButtonX + buttonSize / 2 - 11, pauseButtonY + buttonSize / 2 - 12, 8, 24);
         this.ctx.fillRect(pauseButtonX + buttonSize / 2 + 3, pauseButtonY + buttonSize / 2 - 12, 8, 24);
       }
 
-      // Speed button (second in stack)
+      // Speed button
       const speedButtonX = baseX;
       const speedButtonY = 5 + buttonSize + gap;
 
@@ -817,7 +926,6 @@ export class Renderer {
     }
 
     if (gameState.isVictory) {
-      // Victory screen
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
 
@@ -826,7 +934,6 @@ export class Renderer {
       this.ctx.textAlign = 'center';
       this.ctx.fillText('VICTORY!', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 - 80);
 
-      // Level complete message
       this.ctx.fillStyle = '#FFFFFF';
       this.ctx.font = '24px Arial';
       this.ctx.fillText('Level Complete!', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 - 30);
@@ -841,7 +948,6 @@ export class Renderer {
       );
     }
 
-    // Game Over screen
     if (gameState.isGameOver) {
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       this.ctx.fillRect(0, 0, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
@@ -906,10 +1012,8 @@ export class Renderer {
       const totalWidth = coinRadius * 2 + gap + numberWidth;
       const startX = text.x - totalWidth / 2;
 
-      // Coin icon
       this.drawCoin(startX + coinRadius, text.y, coinRadius);
 
-      // Number
       this.ctx.fillStyle = '#FFD700';
       this.ctx.strokeStyle = '#000';
       this.ctx.lineWidth = 4;
@@ -930,30 +1034,25 @@ export class Renderer {
     const buttonX = pos.x - buttonSize / 2;
     const buttonY = pos.y - 90;
 
-    // Button background
     this.ctx.fillStyle = canAfford ? '#8B4513' : '#888';
     this.roundRect(buttonX, buttonY, buttonSize, buttonSize, 8);
     this.ctx.fill();
 
-    // Button border
     this.ctx.strokeStyle = canAfford ? '#6B3410' : '#666';
     this.ctx.lineWidth = 2;
     this.roundRect(buttonX, buttonY, buttonSize, buttonSize, 8);
     this.ctx.stroke();
 
-    // Shovel icon
     this.ctx.save();
     this.ctx.translate(pos.x, buttonY + 22);
     this.ctx.fillStyle = canAfford ? '#DDD' : '#AAA';
     this.ctx.strokeStyle = canAfford ? '#DDD' : '#AAA';
     this.ctx.lineWidth = 3;
     this.ctx.lineCap = 'round';
-    // Handle
     this.ctx.beginPath();
     this.ctx.moveTo(4, -10);
     this.ctx.lineTo(-4, 8);
     this.ctx.stroke();
-    // Blade
     this.ctx.beginPath();
     this.ctx.moveTo(-4, 8);
     this.ctx.lineTo(-9, 6);
@@ -964,24 +1063,11 @@ export class Renderer {
     this.ctx.fill();
     this.ctx.restore();
 
-    // Coin + cost
     this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
     this.ctx.font = 'bold 14px Arial';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.drawCoinText(`${GAME_CONFIG.lilyRemovalCost}`, pos.x, buttonY + 48, 6);
-  }
-
-  private hashString(str: string): number {
-    let h = 0;
-    for (let i = 0; i < str.length; i++) {
-      h = ((h << 5) - h + str.charCodeAt(i)) | 0;
-    }
-    return Math.abs(h);
-  }
-
-  private nextSeed(seed: number): number {
-    return Math.abs(((seed * 1103515245 + 12345) | 0));
   }
 
   private darkenColor(hex: string, amount: number): string {

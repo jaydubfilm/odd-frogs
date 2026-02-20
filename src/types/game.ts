@@ -68,7 +68,6 @@ export interface FrogStats {
   attackSpeed: number; // attacks per second
   range: number; // in grid units
   cost: number;
-  upgradeCost: number;
   color: string;
 }
 
@@ -76,7 +75,6 @@ export interface FrogData {
   id: string;
   type: FrogType;
   gridPosition: GridPosition;
-  level: number;
   stats: FrogStats;
   lastAttackTime: number;
   targetFood: string | null;

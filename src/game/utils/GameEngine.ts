@@ -1,14 +1,15 @@
-﻿import { 
-  GameState, 
-  LevelData, 
-  GridCell, 
-  FrogData, 
+import {
+  GameState,
+  LevelData,
+  GridCell,
+  FrogData,
   FoodData,
   GridPosition,
   FrogType,
   CellType,
 } from '../../types/game';
-import { GAME_CONFIG } from '@data/constants';
+import { UpgradePath } from '../../types/upgrades';
+import { GAME_CONFIG, UPGRADE_PATH_COSTS } from '@data/constants';
 import { Renderer } from './../systems/Renderer';
 import { FrogSystem } from './../systems/FrogSystem';
 import { FoodSystem } from './../systems/FoodSystem';
@@ -17,6 +18,7 @@ import { WaveSystem } from './../systems/WaveSystem';
 import { AudioManager } from './../systems/AudioManager';
 import { FloatingTextSystem } from './../systems/FloatingTextSystem';
 import { RippleSystem } from './../systems/RippleSystem';
+import { UpgradeSystem } from './../systems/UpgradeSystem';
 
 
 export class GameEngine {
@@ -46,11 +48,12 @@ export class GameEngine {
   private rippleSystem: RippleSystem;
   private collisionSystem: CollisionSystem;
   private waveSystem: WaveSystem;
-  
+  private upgradeSystem: UpgradeSystem;
+
   // Game loop
   private lastFrameTime: number = 0;
   private animationFrameId: number | null = null;
-  
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const context = canvas.getContext('2d', { alpha: false });
@@ -58,7 +61,7 @@ export class GameEngine {
       throw new Error('Failed to get canvas context');
     }
     this.ctx = context;
-    
+
     // Initialize game state
     this.gameState = {
       lives: GAME_CONFIG.startingLives,
@@ -74,7 +77,7 @@ export class GameEngine {
       selectedFrog: null,
       gameSpeed: 1,
     };
-    
+
     // Initialize systems
     this.renderer = new Renderer(this.ctx);
     this.audioManager = new AudioManager();
@@ -85,21 +88,22 @@ export class GameEngine {
     this.foodSystem = new FoodSystem();
     this.collisionSystem = new CollisionSystem();
     this.waveSystem = new WaveSystem(this.foodSystem);
-    
+    this.upgradeSystem = new UpgradeSystem();
+
     // Setup canvas
     this.canvas.width = GAME_CONFIG.canvasWidth;
     this.canvas.height = GAME_CONFIG.canvasHeight;
-    
+
     // Bind methods
     this.gameLoop = this.gameLoop.bind(this);
     this.handleCanvasClick = this.handleCanvasClick.bind(this);
-    this.handleMouseMove = this.handleMouseMove.bind(this); 
-    
+    this.handleMouseMove = this.handleMouseMove.bind(this);
+
     // Setup event listeners
     this.canvas.addEventListener('click', this.handleCanvasClick);
-    this.canvas.addEventListener('mousemove', this.handleMouseMove); 
+    this.canvas.addEventListener('mousemove', this.handleMouseMove);
   }
-  
+
   loadLevel(level: LevelData): void {
     this.currentLevel = level;
     this.gameState.money = level.startingMoney;
@@ -154,11 +158,11 @@ export class GameEngine {
       this.canvas.style.cursor = 'default';
     }
   }
-  
+
   private initializeGrid(level: LevelData): void {
     this.grid = [];
     const topMargin = 60;
-    const leftMargin = 60; // ADD THIS (centers 4 cols in 600px canvas)
+    const leftMargin = 60;
 
     for (let row = 0; row < GAME_CONFIG.gridRows; row++) {
       const gridRow: GridCell[] = [];
@@ -166,10 +170,10 @@ export class GameEngine {
       for (let col = 0; col < GAME_CONFIG.gridCols; col++) {
         const cellType = level.gridLayout[row][col];
         const position = {
-          x: col * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + leftMargin, // ADD leftMargin
+          x: col * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + leftMargin,
           y: row * GAME_CONFIG.cellSize + GAME_CONFIG.cellSize / 2 + topMargin,
         };
-        
+
         gridRow.push({
           type: cellType,
           gridPosition: { row, col },
@@ -177,11 +181,11 @@ export class GameEngine {
           frog: null,
         });
       }
-      
+
       this.grid.push(gridRow);
     }
   }
-  
+
   start(): void {
     if (this.animationFrameId === null) {
       this.lastFrameTime = performance.now();
@@ -209,28 +213,28 @@ export class GameEngine {
       this.animationFrameId = null;
     }
   }
-  
+
   pause(): void {
     this.gameState.isPaused = true;
   }
-  
+
   resume(): void {
     this.gameState.isPaused = false;
   }
-  
+
   private gameLoop(currentTime: number): void {
-    const deltaTime = (currentTime - this.lastFrameTime) / 1000; // Convert to seconds
+    const deltaTime = (currentTime - this.lastFrameTime) / 1000;
     this.lastFrameTime = currentTime;
-    
+
     if (!this.gameState.isPaused && !this.gameState.isGameOver) {
-      this.update(deltaTime * this.gameState.gameSpeed); 
+      this.update(deltaTime * this.gameState.gameSpeed);
     }
-    
+
     this.render();
-    
+
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   }
-  
+
   private update(deltaTime: number): void {
     if (!this.currentLevel) return;
 
@@ -253,7 +257,7 @@ export class GameEngine {
 
     // Check for victory: final wave + all enemies spawned + all enemies dead
     if (this.gameState.wave >= this.currentLevel.waves.length &&
-      this.waveSystem.hasSpawnedAllEnemies() &&  // ← CHANGED: Check spawn queue instead of isActive
+      this.waveSystem.hasSpawnedAllEnemies() &&
       this.foods.size === 0 &&
       !this.gameState.isVictory) {
       this.gameState.isVictory = true;
@@ -264,8 +268,8 @@ export class GameEngine {
     // Update food positions along paths
     this.foodSystem.updateFoods(this.foods, this.currentLevel.streams, deltaTime);
 
-    // Update frog attacks
-    this.frogSystem.updateFrogs(this.frogs, this.foods, this.grid, deltaTime);
+    // Update frog attacks (with upgrade system for effective stats)
+    this.frogSystem.updateFrogs(this.frogs, this.foods, this.grid, deltaTime, this.upgradeSystem);
 
     // Check for collisions and damage
     this.collisionSystem.checkCollisions(this.frogs, this.foods);
@@ -274,7 +278,7 @@ export class GameEngine {
     this.removeDestroyedFoods();
 
     // Update floating texts
-    this.floatingTextSystem.update(deltaTime * 1000); // Convert to ms
+    this.floatingTextSystem.update(deltaTime * 1000);
 
     // Update ripples
     this.rippleSystem.update();
@@ -282,7 +286,7 @@ export class GameEngine {
     // Check for foods that reached the end
     this.checkFoodsReachedEnd();
   }
-  
+
   private render(): void {
     if (!this.currentLevel) return;
 
@@ -294,7 +298,7 @@ export class GameEngine {
       this.renderer.renderStreams(this.currentLevel.streams);
       this.renderer.renderGrid(this.grid, this.selectedLilyCell, this.gameState.money, this.dropHighlightCell, this.getMenuOpacity(this.lilySelectTime));
       this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
-      this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money, this.getMenuOpacity(this.frogSelectTime));
+      this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money, this.getMenuOpacity(this.frogSelectTime), this.upgradeSystem);
       this.renderer.renderFoods(Array.from(this.foods.values()));
       this.renderer.renderRipples(this.rippleSystem.getRipples());
       this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
@@ -308,7 +312,7 @@ export class GameEngine {
       this.handedness
     );
   }
-  
+
   private removeDestroyedFoods(): void {
     for (const [id, food] of this.foods) {
       if (food.currentHealth <= 0) {
@@ -319,29 +323,26 @@ export class GameEngine {
       }
     }
   }
-  
+
   private checkFoodsReachedEnd(): void {
     for (const [id, food] of this.foods) {
-      // Check if food has completed all path segments
       if (this.foodSystem.hasReachedEnd(food)) {
         this.gameState.lives--;
         this.foods.delete(id);
-        
+
         if (this.gameState.lives <= 0) {
           this.gameState.isGameOver = true;
         }
       }
     }
   }
-  
+
   private handleCanvasClick(event: MouseEvent): void {
     const rect = this.canvas.getBoundingClientRect();
-    // Account for CSS scaling
     const scaleX = this.canvas.width / rect.width;
     const scaleY = this.canvas.height / rect.height;
     const x = (event.clientX - rect.left) * scaleX;
     const y = (event.clientY - rect.top) * scaleY;
-    console.log('Click detected at', x, y, 'selectedFrogType:', this.gameState.selectedFrogType);
 
     // Check for restart button click if game is over OR victory
     if (this.gameState.isGameOver || this.gameState.isVictory) {
@@ -369,31 +370,26 @@ export class GameEngine {
         this.resume();
         return;
       }
-      return; // Don't process other clicks when paused
+      return;
     }
 
     // Stacked button layout (60px, 5px gap)
-    const buttonSize = 60;
+    const uiButtonSize = 60;
     const gap = 5;
     const isLeft = this.handedness === 'left';
-    const baseX = isLeft ? 5 : GAME_CONFIG.canvasWidth - buttonSize - 5;
+    const baseX = isLeft ? 5 : GAME_CONFIG.canvasWidth - uiButtonSize - 5;
 
     // Check for pause button click (top of stack)
-    const pauseButtonX = baseX;
-    const pauseButtonY = 5;
-
-    if (x >= pauseButtonX && x <= pauseButtonX + buttonSize &&
-      y >= pauseButtonY && y <= pauseButtonY + buttonSize) {
+    if (x >= baseX && x <= baseX + uiButtonSize &&
+      y >= 5 && y <= 5 + uiButtonSize) {
       this.togglePause();
       return;
     }
 
     // Check for speed button click (second in stack)
-    const speedButtonX = baseX;
-    const speedButtonY = 5 + buttonSize + gap;
-
-    if (x >= speedButtonX && x <= speedButtonX + buttonSize &&
-      y >= speedButtonY && y <= speedButtonY + buttonSize) {
+    const speedButtonY = 5 + uiButtonSize + gap;
+    if (x >= baseX && x <= baseX + uiButtonSize &&
+      y >= speedButtonY && y <= speedButtonY + uiButtonSize) {
       this.toggleSpeed();
       return;
     }
@@ -401,11 +397,9 @@ export class GameEngine {
     // Check for "Call Next Wave" button click (third in stack)
     const currentTime = performance.now() / 1000;
     if (this.waveSystem.canCallNextWave(currentTime, this.foods)) {
-      const callButtonX = baseX;
-      const callButtonY = 5 + (buttonSize + gap) * 2;
-
-      if (x >= callButtonX && x <= callButtonX + buttonSize &&
-        y >= callButtonY && y <= callButtonY + buttonSize) {
+      const callButtonY = 5 + (uiButtonSize + gap) * 2;
+      if (x >= baseX && x <= baseX + uiButtonSize &&
+        y >= callButtonY && y <= callButtonY + uiButtonSize) {
         this.callNextWave();
         return;
       }
@@ -417,28 +411,67 @@ export class GameEngine {
       if (frog) {
         const cell = this.grid[frog.gridPosition.row][frog.gridPosition.col];
         const frogPos = cell.position;
-        const buttonSize = 60;
-        const gap = 16;
-        const buttonY = frogPos.y - 50 - buttonSize; // Above the frog
+        const btnSize = 60;
+        const btnGap = 16;
+        const level = frog.upgradeState.level;
+        const availablePaths = this.upgradeSystem.getAvailablePaths(frog);
 
-        // Upgrade button (left)
-        const upgradeButtonX = frogPos.x - buttonSize - gap / 2;
+        if (level === 0) {
+          // Level 0: show 3 path buttons (V-Stripes, Spots, H-Stripes) + sell
+          // Layout: 3 path buttons in a row above frog, sell button below them
+          const totalWidth = btnSize * 3 + btnGap * 2;
+          const startX = frogPos.x - totalWidth / 2;
+          const pathButtonY = frogPos.y - 50 - btnSize * 2 - btnGap;
+          const sellButtonY = frogPos.y - 50 - btnSize;
 
-        if (frog.level < 3 &&
-          x >= upgradeButtonX && x <= upgradeButtonX + buttonSize &&
-          y >= buttonY && y <= buttonY + buttonSize) {
-          this.upgradeFrog(frog.id);
-          return;
-        }
+          // Check path buttons (V-Stripes, Spots, H-Stripes)
+          const pathOrder = [UpgradePath.VERTICAL_STRIPES, UpgradePath.SPOTS, UpgradePath.HORIZONTAL_STRIPES];
+          for (let i = 0; i < 3; i++) {
+            const btnX = startX + i * (btnSize + btnGap);
+            if (x >= btnX && x <= btnX + btnSize &&
+              y >= pathButtonY && y <= pathButtonY + btnSize) {
+              this.purchasePathUpgrade(frog.id, pathOrder[i]);
+              return;
+            }
+          }
 
-        // Sell button (centered if max level, right if not)
-        const sellButtonX = frog.level >= 3 ? frogPos.x - buttonSize / 2 : frogPos.x + gap / 2;
+          // Check sell button (centered below path buttons)
+          const sellBtnX = frogPos.x - btnSize / 2;
+          if (x >= sellBtnX && x <= sellBtnX + btnSize &&
+            y >= sellButtonY && y <= sellButtonY + btnSize) {
+            this.sellFrog(frog.id);
+            this.deselectFrog();
+            return;
+          }
+        } else if (level < 3 && availablePaths.length > 0) {
+          // Level 1-2: show 1 upgrade button (locked path) + sell
+          const buttonY = frogPos.y - 50 - btnSize;
+          const upgradeButtonX = frogPos.x - btnSize - btnGap / 2;
 
-        if (x >= sellButtonX && x <= sellButtonX + buttonSize &&
-          y >= buttonY && y <= buttonY + buttonSize) {
-          this.sellFrog(frog.id);
-          this.deselectFrog();
-          return;
+          if (x >= upgradeButtonX && x <= upgradeButtonX + btnSize &&
+            y >= buttonY && y <= buttonY + btnSize) {
+            this.purchasePathUpgrade(frog.id, availablePaths[0]);
+            return;
+          }
+
+          // Sell button (right)
+          const sellButtonX = frogPos.x + btnGap / 2;
+          if (x >= sellButtonX && x <= sellButtonX + btnSize &&
+            y >= buttonY && y <= buttonY + btnSize) {
+            this.sellFrog(frog.id);
+            this.deselectFrog();
+            return;
+          }
+        } else {
+          // Level 3: sell only (centered)
+          const buttonY = frogPos.y - 50 - btnSize;
+          const sellButtonX = frogPos.x - btnSize / 2;
+          if (x >= sellButtonX && x <= sellButtonX + btnSize &&
+            y >= buttonY && y <= buttonY + btnSize) {
+            this.sellFrog(frog.id);
+            this.deselectFrog();
+            return;
+          }
         }
       }
     }
@@ -450,11 +483,11 @@ export class GameEngine {
       const lilyCell = this.grid[this.selectedLilyCell.row]?.[this.selectedLilyCell.col];
       if (lilyCell) {
         const pos = lilyCell.position;
-        const buttonSize = 60;
-        const buttonX = pos.x - buttonSize / 2;
+        const btnSize = 60;
+        const buttonX = pos.x - btnSize / 2;
         const buttonY = pos.y - 90;
-        if (x >= buttonX && x <= buttonX + buttonSize &&
-          y >= buttonY && y <= buttonY + buttonSize) {
+        if (x >= buttonX && x <= buttonX + btnSize &&
+          y >= buttonY && y <= buttonY + btnSize) {
           this.removeLily(this.selectedLilyCell);
           this.deselectLily();
           return;
@@ -497,25 +530,19 @@ export class GameEngine {
   private removeLily(gridPos: GridPosition): boolean {
     const cell = this.grid[gridPos.row][gridPos.col];
 
-    // Check if it's a lily pad with lily
     if (cell.type !== CellType.LILYPAD_WITH_LILY) {
       return false;
     }
 
-    // Check if player has enough money
     if (this.gameState.money < GAME_CONFIG.lilyRemovalCost) {
-      console.log('Not enough money to remove lily');
       return false;
     }
 
-    // Remove the lily
     cell.type = CellType.LILYPAD;
-    this.gameState.money -= GAME_CONFIG.lilyRemovalCost; 
-
-    console.log(`Lily removed for $${GAME_CONFIG.lilyRemovalCost}`); 
+    this.gameState.money -= GAME_CONFIG.lilyRemovalCost;
     return true;
   }
-  
+
   private pixelToGrid(x: number, y: number): GridPosition | null {
     const topMargin = 60;
     const leftMargin = 60;
@@ -528,46 +555,36 @@ export class GameEngine {
 
     return null;
   }
-  
+
   placeFrog(gridPos: GridPosition, frogType: FrogType): boolean {
-    console.log('placeFrog called', gridPos, frogType);
     const cell = this.grid[gridPos.row][gridPos.col];
-    
-    // Check if placement is valid
+
     if (cell.type !== CellType.LILYPAD || cell.frog !== null) {
       return false;
     }
-    
-    // Check if player has enough money
+
     const frogData = this.frogSystem.createFrog(frogType, gridPos);
     if (this.gameState.money < frogData.stats.cost) {
       return false;
     }
-    
-    // Place frog
+
     this.gameState.money -= frogData.stats.cost;
     cell.frog = frogData;
     this.frogs.set(frogData.id, frogData);
 
-    // Ripple effect
     this.rippleSystem.add(cell.position.x, cell.position.y);
 
     return true;
   }
 
-  upgradeFrog(frogId: string): boolean {
+  purchasePathUpgrade(frogId: string, path: UpgradePath): boolean {
     const frog = this.frogs.get(frogId);
     if (!frog) return false;
 
-    // Max level is 3
-    if (frog.level >= 3) return false;
+    if (!this.upgradeSystem.canPurchaseUpgrade(frog, path, this.gameState.money)) return false;
 
-    const upgradeCost = frog.stats.upgradeCost;
-    if (this.gameState.money < upgradeCost) return false;
-
-    this.gameState.money -= upgradeCost;
-    frog.totalSpent += upgradeCost;
-    this.frogSystem.upgradeFrog(frog);
+    const cost = this.upgradeSystem.purchaseUpgrade(frog, path);
+    this.gameState.money -= cost;
 
     return true;
   }
@@ -594,11 +611,10 @@ export class GameEngine {
 
   callNextWave(): void {
     const currentTime = performance.now() / 1000;
-    const bonus = this.waveSystem.callNextWaveEarly(currentTime, this.foods);  // ← ADD this.foods
+    const bonus = this.waveSystem.callNextWaveEarly(currentTime, this.foods);
 
     if (bonus > 0) {
       this.gameState.money += bonus;
-      console.log(`Early wave bonus: $${bonus}`);
     }
   }
 
@@ -665,7 +681,7 @@ export class GameEngine {
   getGridCell(row: number, col: number): GridCell | null {
     return this.grid[row]?.[col] ?? null;
   }
-  
+
   getGameState(): GameState {
     return { ...this.gameState };
   }
@@ -673,21 +689,19 @@ export class GameEngine {
   getWaveSystem(): WaveSystem {
     return this.waveSystem;
   }
-  
+
   destroy(): void {
     this.stop();
     this.canvas.removeEventListener('click', this.handleCanvasClick);
-    this.canvas.removeEventListener('mousemove', this.handleMouseMove); 
+    this.canvas.removeEventListener('mousemove', this.handleMouseMove);
   }
 
   toggleSpeed(): void {
     this.gameState.gameSpeed = this.gameState.gameSpeed === 1 ? 2 : 1;
-    console.log(`Game speed: ${this.gameState.gameSpeed}x`);
   }
 
   togglePause(): void {
     this.gameState.isPaused = !this.gameState.isPaused;
-    console.log(`Game ${this.gameState.isPaused ? 'paused' : 'resumed'}`);
   }
 
   getHoveredCell(): GridPosition | null {

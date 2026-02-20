@@ -33,7 +33,7 @@ function App() {
 
   // Initialize level progress (20 levels)
   const [levelProgress, setLevelProgress] = useState<LevelProgress[]>(() => {
-    return Array.from({ length: 20 }, (_, i) => ({
+    return Array.from({ length: 100 }, (_, i) => ({
       levelNumber: i + 1,
       completed: false,
       stars: 0,

@@ -63,12 +63,16 @@ export function LevelMap({ progress, onSelectLevel, onUnlockAll, onOpenSettings 
   // Auto-scroll to unlocked level
   useEffect(() => {
     if (scrollContainerRef.current) {
-      // Find the last unlocked level (ES5 compatible)
+      // Find the highest uncompleted unlocked level to scroll to.
+      // If all are unlocked (dev mode), default to level 1 (index 0).
+      const allUnlocked = progress.every(p => p.unlocked);
       let currentLevelIndex = 0;
-      for (let i = progress.length - 1; i >= 0; i--) {
-        if (progress[i].unlocked) {
-          currentLevelIndex = i;
-          break;
+      if (!allUnlocked) {
+        for (let i = progress.length - 1; i >= 0; i--) {
+          if (progress[i].unlocked) {
+            currentLevelIndex = i;
+            break;
+          }
         }
       }
       const pos = getNodePosition(currentLevelIndex);

@@ -1,28 +1,12 @@
-export enum UpgradeStat {
-  DAMAGE = 'DAMAGE',
-  ATTACK_SPEED = 'ATTACK_SPEED',
-  RANGE = 'RANGE',
-}
-
-export interface UpgradeNode {
-  id: string;
-  name: string;
-  description: string;
-  stat: UpgradeStat;
-  maxLevel: number;
-  currentLevel: number;
-  costPerLevel: number[];  // Cost for each level [level1, level2, level3]
-  valuePerLevel: number[]; // Value increase for each level
-  children: string[];      // IDs of child nodes
-  isUnlocked: boolean;
-}
-
-export interface UpgradeTree {
-  nodes: Map<string, UpgradeNode>;
-  rootNodes: string[];     // IDs of root nodes
+export enum UpgradePath {
+  NONE = 'NONE',
+  SPOTS = 'SPOTS',
+  HORIZONTAL_STRIPES = 'HORIZONTAL_STRIPES',
+  VERTICAL_STRIPES = 'VERTICAL_STRIPES',
 }
 
 export interface FrogUpgradeState {
-  tree: UpgradeTree;
+  path: UpgradePath;
+  level: number; // 0-3
   totalSpent: number;
 }
