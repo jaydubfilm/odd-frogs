@@ -82,6 +82,9 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
 
     const gameEngine = new GameEngine(canvasRef.current);
     gameEngineRef.current = gameEngine;
+    gameEngine.onVictoryContinue = () => {
+      if (onLevelComplete) onLevelComplete();
+    };
     gameEngine.loadLevel(level);
     gameEngine.start();
 
@@ -136,16 +139,6 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
     return () => clearInterval(interval);
   }, [onGameStateChange, onWaveInfoChange]);
 
-  // Detect victory and trigger level completion
-  useEffect(() => {
-    if (currentGameState?.isVictory && onLevelComplete) {
-      const timer = setTimeout(() => {
-        onLevelComplete();
-      }, 2000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [currentGameState?.isVictory, onLevelComplete]);
 
   return (
     <div className="relative w-full h-full flex items-end justify-center">

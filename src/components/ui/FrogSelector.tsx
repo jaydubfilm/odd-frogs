@@ -11,6 +11,7 @@ interface FrogSelectorProps {
   draggingFrogType?: FrogType | null;
   playerMoney: number;
   handedness?: 'left' | 'right';
+  availableFrogTypes?: FrogType[];
 }
 
 export const FrogSelector = ({
@@ -20,8 +21,10 @@ export const FrogSelector = ({
   draggingFrogType,
   playerMoney,
   handedness = 'right',
+  availableFrogTypes,
 }: FrogSelectorProps) => {
-  const frogTypes = Object.values(FrogType);
+  const allFrogTypes = Object.values(FrogType);
+  const frogTypes = availableFrogTypes ? allFrogTypes.filter(ft => availableFrogTypes.includes(ft)) : allFrogTypes;
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
 
   const handlePointerDown = useCallback((e: React.PointerEvent, frogType: FrogType) => {
@@ -54,7 +57,7 @@ export const FrogSelector = ({
 
   return (
     <div className="bg-white/90 rounded-lg p-2 shadow-lg">
-      <div className={`flex gap-2 ${handedness === 'right' ? 'justify-end' : 'justify-start'}`}>
+      <div className="flex gap-2 justify-center">
         {frogTypes.map(frogType => {
             const stats = FROG_STATS[frogType];
             const canAfford = playerMoney >= stats.cost;

@@ -1,6 +1,7 @@
 import { LevelData, WaveData, FoodType, CellType, StreamPath, PathSegment } from '../../types/game';
 import { channelsToPath, channelsToSegments } from './LevelGenerator';
 import { PathGenerator } from './PathGenerator';
+import { PURCHASE_SLOTS_FOR_LEVEL } from '../../data/constants';
 import levelSet from '../../data/levelSet.json';
 
 type CellChar = 'E' | 'L' | 'W' | 'R';
@@ -59,10 +60,31 @@ export class ProceduralLevelGenerator {
       streams,
       waves,
       startingMoney,
+      purchaseSlots: PURCHASE_SLOTS_FOR_LEVEL(levelNumber),
     };
   }
 
   private generateWaves(levelNumber: number): WaveData[] {
+    // Level 2: cherry swarm — forces the player to use the rapid-fire Blue frog
+    if (levelNumber === 2) {
+      return [
+        { waveNumber: 1, duration: 30, foods: [
+          { type: FoodType.CHERRY, count: 8, spawnInterval: 0.6, streamId: 'stream-0' },
+        ]},
+        { waveNumber: 2, duration: 30, foods: [
+          { type: FoodType.CHERRY, count: 12, spawnInterval: 0.5, streamId: 'stream-0' },
+        ]},
+        { waveNumber: 3, duration: 30, foods: [
+          { type: FoodType.CHERRY, count: 10, spawnInterval: 0.4, streamId: 'stream-0' },
+          { type: FoodType.APPLE, count: 3, spawnInterval: 1.5, streamId: 'stream-0' },
+        ]},
+        { waveNumber: 4, duration: 30, foods: [
+          { type: FoodType.CHERRY, count: 15, spawnInterval: 0.35, streamId: 'stream-0' },
+          { type: FoodType.APPLE, count: 4, spawnInterval: 1.2, streamId: 'stream-0' },
+        ]},
+      ];
+    }
+
     const waves: WaveData[] = [];
     const baseWaveCount = 3;
     const waveCount = baseWaveCount + Math.floor(levelNumber / 2);

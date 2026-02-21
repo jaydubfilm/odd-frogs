@@ -166,6 +166,7 @@ export interface LevelData {
   streams: StreamPath[];
   waves: WaveData[];
   startingMoney: number;
+  purchaseSlots: number;
 }
 
 export interface GameConfig {

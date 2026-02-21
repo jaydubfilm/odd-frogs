@@ -1,12 +1,15 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GameCanvas, GameCanvasHandle } from './components/game/GameCanvas';
 import { FrogSelector } from './components/ui/FrogSelector';
 import { FrogPreview } from './components/ui/FrogPreview';
 import { GameStats } from './components/ui/GameStats';
 import { LevelMap } from './components/ui/LevelMap';
+import { FrogSelectionScreen } from './components/ui/FrogSelectionScreen';
+import { FrogUnlockedScreen } from './components/ui/FrogUnlockedScreen';
 import { SettingsModal } from './components/ui/SettingsModal';
 import { GameState, FrogType, LevelProgress } from './types/game';
 import { ProceduralLevelGenerator } from './game/utils/ProceduralLevelGenerator';
+import { FROG_UNLOCK_LEVEL } from './data/constants';
 import './styles/index.css';
 
 function App() {
@@ -15,7 +18,10 @@ function App() {
 
   // Level selection state
   const [showLevelMap, setShowLevelMap] = useState(true);
+  const [showFrogSelection, setShowFrogSelection] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState(1);
+  const [selectedFrogTypes, setSelectedFrogTypes] = useState<FrogType[]>([]);
+  const [newlyUnlockedFrog, setNewlyUnlockedFrog] = useState<FrogType | null>(null);
 
   // Settings
   const [showSettings, setShowSettings] = useState(false);
@@ -40,6 +46,17 @@ function App() {
       unlocked: i === 0, // Only first level unlocked
     }));
   });
+
+  // Derive unlocked frog types from level progress
+  const unlockedFrogTypes = useMemo(() => {
+    const highestUnlocked = levelProgress.reduce(
+      (max, lp) => (lp.unlocked ? Math.max(max, lp.levelNumber) : max),
+      1
+    );
+    return Object.values(FrogType).filter(
+      ft => FROG_UNLOCK_LEVEL[ft] <= highestUnlocked
+    );
+  }, [levelProgress]);
 
   const [level, setLevel] = useState(() =>
     levelGeneratorRef.current.generateLevel(1)
@@ -75,25 +92,36 @@ function App() {
     setSelectedLevel(levelNumber);
     const proceduralLevel = levelGeneratorRef.current.generateLevel(levelNumber);
     setLevel(proceduralLevel);
+
+    setShowLevelMap(false);
+    setShowFrogSelection(true);
+  };
+
+  const handleConfirmSelection = (chosenFrogs: FrogType[]) => {
+    setSelectedFrogTypes(chosenFrogs);
+    setShowFrogSelection(false);
     setLevelKey(k => k + 1);
 
     // Reset game state for new level
     setGameState({
       lives: 3,
-      money: proceduralLevel.startingMoney,
+      money: level.startingMoney,
       wave: 0,
       score: 0,
       isPaused: false,
       isGameOver: false,
       isVictory: false,
-      currentLevel: levelNumber,
+      currentLevel: selectedLevel,
       selectedFrogType: null,
       selectedFrog: null,
       selectedGridCell: null,
       gameSpeed: 1,
     });
+  };
 
-    setShowLevelMap(false);
+  const handleBackFromSelection = () => {
+    setShowFrogSelection(false);
+    setShowLevelMap(true);
   };
 
   const handleLevelComplete = useCallback(() => {
@@ -121,8 +149,17 @@ function App() {
       return updated;
     });
 
-    // Return to map
-    setShowLevelMap(true);
+    // Check if beating this level unlocks a new frog
+    const nextLevel = selectedLevel + 1;
+    const unlockedFrog = Object.entries(FROG_UNLOCK_LEVEL).find(
+      ([, lvl]) => lvl === nextLevel
+    );
+
+    if (unlockedFrog) {
+      setNewlyUnlockedFrog(unlockedFrog[0] as FrogType);
+    } else {
+      setShowLevelMap(true);
+    }
   }, [selectedLevel, gameState.lives]);
 
   const calculateStars = (state: GameState): number => {
@@ -243,12 +280,29 @@ function App() {
       onPointerMove={handlePointerMoveDrag}
       onPointerUp={handlePointerUpDrag}
     >
-      {showLevelMap ? (
+      {newlyUnlockedFrog ? (
+        <FrogUnlockedScreen
+          frogType={newlyUnlockedFrog}
+          onContinue={() => {
+            setNewlyUnlockedFrog(null);
+            setShowLevelMap(true);
+          }}
+        />
+      ) : showLevelMap ? (
         <LevelMap
           progress={levelProgress}
           onSelectLevel={handleSelectLevel}
           onUnlockAll={handleUnlockAll}
           onOpenSettings={() => setShowSettings(true)}
+        />
+      ) : showFrogSelection ? (
+        <FrogSelectionScreen
+          level={level}
+          levelNumber={selectedLevel}
+          unlockedFrogTypes={unlockedFrogTypes}
+          purchaseSlots={level.purchaseSlots}
+          onConfirm={handleConfirmSelection}
+          onBack={handleBackFromSelection}
         />
       ) : (
           <div className="h-full flex flex-col px-1">
@@ -304,6 +358,7 @@ function App() {
                 draggingFrogType={dragging?.frogType ?? null}
                 playerMoney={gameState.money}
                 handedness={handedness}
+                availableFrogTypes={selectedFrogTypes.length > 0 ? selectedFrogTypes : undefined}
               />
             </div>
 
@@ -317,6 +372,7 @@ function App() {
                   draggingFrogType={dragging?.frogType ?? null}
                   playerMoney={gameState.money}
                   handedness={handedness}
+                  availableFrogTypes={selectedFrogTypes.length > 0 ? selectedFrogTypes : undefined}
                 />
               </div>
               <div className="w-80">

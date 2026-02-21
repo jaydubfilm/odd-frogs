@@ -1,6 +1,20 @@
 import { FrogType, FrogStats, FoodType, FoodStats, GameConfig } from '../types/game';
 import { UpgradePath } from '../types/upgrades';
 
+export const FROG_UNLOCK_LEVEL: Record<FrogType, number> = {
+  [FrogType.GREEN]: 1,
+  [FrogType.BLUE]: 2,
+  [FrogType.YELLOW]: 3,
+  [FrogType.PURPLE]: 4,
+  [FrogType.RED]: 5,
+};
+
+export function PURCHASE_SLOTS_FOR_LEVEL(levelNumber: number): number {
+  if (levelNumber <= 1) return 1;
+  if (levelNumber <= 2) return 2;
+  return 3;
+}
+
 
 export const GAME_CONFIG: GameConfig = {
   gridRows: 5,
@@ -40,7 +54,7 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
   },
   [FrogType.GREEN]: {
     damage: 25,
-    attackSpeed: 1.5,
+    attackSpeed: 0.75,
     range: 1.5,
     cost: 16,
     color: '#2ECC71',

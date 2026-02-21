@@ -128,17 +128,6 @@ export function LevelMap({ progress, onSelectLevel, onUnlockAll, onOpenSettings 
             <h1 className="text-4xl font-black text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] tracking-wider">
               RIO RIBBIT
             </h1>
-
-            {/* Dev Unlock All Button */}
-            {onUnlockAll && (
-              <button
-                onClick={onUnlockAll}
-                className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs 
-                           font-bold rounded shadow-lg pointer-events-auto transition-colors"
-              >
-                🔓 DEV: Unlock All
-              </button>
-            )}
           </div>
 
           {/* 2. THE RIVER LAYER (SVG) */}
@@ -253,6 +242,22 @@ export function LevelMap({ progress, onSelectLevel, onUnlockAll, onOpenSettings 
               START
             </div>
           </div>
+
+          {/* Dev Unlock All Button */}
+          {onUnlockAll && (
+            <div
+              className="absolute w-full text-center z-20"
+              style={{ top: `${MAP_HEIGHT - 40}px` }}
+            >
+              <button
+                onClick={onUnlockAll}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs
+                           font-bold rounded shadow-lg transition-colors"
+              >
+                DEV: Unlock All
+              </button>
+            </div>
+          )}
 
         </div>
       </div>

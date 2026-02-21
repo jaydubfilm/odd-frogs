@@ -67,7 +67,7 @@ export class Renderer {
     });
   }
 
-  renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number, dropHighlightCell?: GridPosition | null, menuOpacity: number = 1, dropHighlightRange?: number, dropHighlightMinRange?: number): void {
+  renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number, dropHighlightCell?: GridPosition | null, menuOpacity: number = 1, dropHighlightRange?: number, dropHighlightMinRange?: number, dropHighlightIgnoresRocks?: boolean, dropHighlightBlockedByFrogs?: boolean): void {
     grid.forEach(row => {
       row.forEach(cell => {
         this.renderCell(cell);
@@ -77,7 +77,7 @@ export class Renderer {
           cell.gridPosition.col === dropHighlightCell.col &&
           cell.type === CellType.LILYPAD &&
           cell.frog === null) {
-          this.renderDropHighlight(cell, dropHighlightRange, dropHighlightMinRange);
+          this.renderDropHighlight(cell, dropHighlightRange, dropHighlightMinRange, grid, dropHighlightIgnoresRocks, dropHighlightBlockedByFrogs);
         }
 
         if (hoveredCell &&
@@ -94,10 +94,11 @@ export class Renderer {
     });
   }
 
-  private renderDropHighlight(cell: GridCell, range?: number, minRange?: number): void {
+  private renderDropHighlight(cell: GridCell, range?: number, minRange?: number, grid?: GridCell[][], ignoresRocks?: boolean, blockedByFrogs?: boolean): void {
     const { x, y } = cell.position;
     const rangeRadius = range ? range * GAME_CONFIG.cellSize : GAME_CONFIG.cellSize * 0.5 + 2;
     const minRangeRadius = minRange ? minRange * GAME_CONFIG.cellSize : 0;
+    const showRockShadows = !ignoresRocks;
 
     this.ctx.save();
 
@@ -110,6 +111,46 @@ export class Renderer {
       this.ctx.arc(x, y, minRangeRadius, 0, Math.PI * 2, true);
     }
     this.ctx.fill();
+
+    // Shadow wedges for line-of-sight blockers
+    if (grid && (showRockShadows || blockedByFrogs)) {
+      const blockerRadius = GAME_CONFIG.cellSize * 0.25;
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+
+      for (let r = 0; r < grid.length; r++) {
+        for (let c = 0; c < grid[r].length; c++) {
+          const gridCell = grid[r][c];
+
+          // Skip the placement cell itself
+          if (gridCell.gridPosition.row === cell.gridPosition.row &&
+            gridCell.gridPosition.col === cell.gridPosition.col) continue;
+
+          const isRock = gridCell.type === CellType.ROCK;
+          const hasFrog = gridCell.frog !== null;
+
+          if (isRock && !showRockShadows) continue;
+          if (hasFrog && !blockedByFrogs) continue;
+          if (!isRock && !hasFrog) continue;
+
+          const bx = gridCell.position.x;
+          const by = gridCell.position.y;
+          const dx = bx - x;
+          const dy = by - y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 1 || dist > rangeRadius) continue;
+
+          const centerAngle = Math.atan2(dy, dx);
+          const halfAngle = Math.atan2(blockerRadius, dist);
+
+          this.ctx.beginPath();
+          this.ctx.arc(x, y, dist, centerAngle - halfAngle, centerAngle + halfAngle);
+          this.ctx.arc(x, y, rangeRadius, centerAngle + halfAngle, centerAngle - halfAngle, true);
+          this.ctx.closePath();
+          this.ctx.fill();
+        }
+      }
+    }
 
     // Outer range stroke
     this.ctx.strokeStyle = '#FFD700';
@@ -254,43 +295,39 @@ export class Renderer {
     }
 
     const buttonSize = 60;
-    const btnGap = 16;
     const level = frog.upgradeState.level;
     const sellValue = Math.floor((frog.stats.cost + frog.totalSpent) / 2);
+    const arcRadius = 80;
+    const sellBtnX = pos.x - buttonSize / 2;
+    const sellBtnY = pos.y + 45;
 
     if (level === 0) {
-      // Level 0: show 3 path buttons + sell
-      const totalWidth = buttonSize * 3 + btnGap * 2;
-      const startX = pos.x - totalWidth / 2;
-      const pathButtonY = pos.y - 50 - buttonSize * 2 - btnGap;
-      const sellButtonY = pos.y - 50 - buttonSize;
-
-      // Path buttons: V-Stripes, Spots, H-Stripes
-      const pathLabels = ['V', 'S', 'H'];
+      // Level 0: 3 path buttons in arc above, sell below
       const pathColors = ['#3498DB', '#E67E22', '#27AE60'];
       const paths = [UpgradePath.VERTICAL_STRIPES, UpgradePath.SPOTS, UpgradePath.HORIZONTAL_STRIPES];
+      const angles = [-2.79, -Math.PI / 2, -0.35]; // ~-160, -90, -20 degrees
       const cost = UPGRADE_PATH_COSTS[0];
       const canAfford = money >= cost;
 
       for (let i = 0; i < 3; i++) {
-        const btnX = startX + i * (buttonSize + btnGap);
+        const cx = pos.x + arcRadius * Math.cos(angles[i]);
+        const cy = pos.y + arcRadius * Math.sin(angles[i]);
+        const btnX = cx - buttonSize / 2;
+        const btnY = cy - buttonSize / 2;
 
         this.ctx.fillStyle = canAfford ? pathColors[i] : '#888';
-        this.roundRect(btnX, pathButtonY, buttonSize, buttonSize, 8);
+        this.roundRect(btnX, btnY, buttonSize, buttonSize, 8);
         this.ctx.fill();
 
         this.ctx.strokeStyle = canAfford ? this.darkenColor(pathColors[i], 0.2) : '#666';
         this.ctx.lineWidth = 2;
-        this.roundRect(btnX, pathButtonY, buttonSize, buttonSize, 8);
+        this.roundRect(btnX, btnY, buttonSize, buttonSize, 8);
         this.ctx.stroke();
 
         // Draw path icon preview
-        const iconCx = btnX + buttonSize / 2;
-        const iconCy = pathButtonY + 22;
-        const iconR = 12;
         this.ctx.save();
         this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
-        this.drawPathIcon(paths[i], iconCx, iconCy, iconR);
+        this.drawPathIcon(paths[i], cx, cy - 8, 12);
         this.ctx.restore();
 
         // Cost text
@@ -298,36 +335,34 @@ export class Renderer {
         this.ctx.font = 'bold 16px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.drawCoinText(`${cost}`, iconCx, pathButtonY + 48, 6);
+        this.drawCoinText(`${cost}`, cx, cy + 18, 6);
       }
 
-      // Sell button (centered below)
-      const sellBtnX = pos.x - buttonSize / 2;
-      this.renderSellButton(sellBtnX, sellButtonY, buttonSize, sellValue);
+      this.renderSellButton(sellBtnX, sellBtnY, buttonSize, sellValue);
     } else if (level < 3) {
-      // Level 1-2: upgrade button (left) + sell button (right)
-      const buttonY = pos.y - 50 - buttonSize;
-      const upgradeButtonX = pos.x - buttonSize - btnGap / 2;
+      // Level 1-2: upgrade button above (centered), sell below
       const cost = UPGRADE_PATH_COSTS[level];
       const canAfford = money >= cost;
+      const upgradeCx = pos.x;
+      const upgradeCy = pos.y - arcRadius;
+      const upgradeX = upgradeCx - buttonSize / 2;
+      const upgradeY = upgradeCy - buttonSize / 2;
 
-      // Upgrade button
       this.ctx.fillStyle = canAfford ? '#4CAF50' : '#888';
-      this.roundRect(upgradeButtonX, buttonY, buttonSize, buttonSize, 8);
+      this.roundRect(upgradeX, upgradeY, buttonSize, buttonSize, 8);
       this.ctx.fill();
 
       this.ctx.strokeStyle = canAfford ? '#45a049' : '#666';
       this.ctx.lineWidth = 2;
-      this.roundRect(upgradeButtonX, buttonY, buttonSize, buttonSize, 8);
+      this.roundRect(upgradeX, upgradeY, buttonSize, buttonSize, 8);
       this.ctx.stroke();
 
       // Up arrow
       this.ctx.fillStyle = 'white';
-      const cx = upgradeButtonX + buttonSize / 2;
       this.ctx.beginPath();
-      this.ctx.moveTo(cx, buttonY + 10);
-      this.ctx.lineTo(cx - 8, buttonY + 20);
-      this.ctx.lineTo(cx + 8, buttonY + 20);
+      this.ctx.moveTo(upgradeCx, upgradeY + 10);
+      this.ctx.lineTo(upgradeCx - 8, upgradeY + 20);
+      this.ctx.lineTo(upgradeCx + 8, upgradeY + 20);
       this.ctx.closePath();
       this.ctx.fill();
 
@@ -336,16 +371,12 @@ export class Renderer {
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       this.ctx.fillStyle = 'white';
-      this.drawCoinText(`${cost}`, cx, buttonY + 42, 8);
+      this.drawCoinText(`${cost}`, upgradeCx, upgradeY + 42, 8);
 
-      // Sell button (right)
-      const sellButtonX = pos.x + btnGap / 2;
-      this.renderSellButton(sellButtonX, buttonY, buttonSize, sellValue);
+      this.renderSellButton(sellBtnX, sellBtnY, buttonSize, sellValue);
     } else {
-      // Level 3: sell only (centered)
-      const buttonY = pos.y - 50 - buttonSize;
-      const sellButtonX = pos.x - buttonSize / 2;
-      this.renderSellButton(sellButtonX, buttonY, buttonSize, sellValue);
+      // Level 3: sell only below
+      this.renderSellButton(sellBtnX, sellBtnY, buttonSize, sellValue);
     }
 
     this.ctx.restore();
@@ -988,15 +1019,30 @@ export class Renderer {
       this.ctx.fillStyle = '#FFFFFF';
       this.ctx.font = '24px Arial';
       this.ctx.fillText('Level Complete!', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 - 30);
-      this.ctx.fillText('Returning to map...', GAME_CONFIG.canvasWidth / 2, GAME_CONFIG.canvasHeight / 2 + 10);
 
       this.ctx.fillStyle = 'white';
       this.ctx.font = '20px Arial';
       this.ctx.fillText(
         `Final Score: ${gameState.score}`,
         GAME_CONFIG.canvasWidth / 2,
-        GAME_CONFIG.canvasHeight / 2 + 50
+        GAME_CONFIG.canvasHeight / 2 + 20
       );
+
+      // Continue button
+      const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
+      const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
+      const buttonWidth = 150;
+      const buttonHeight = 40;
+
+      this.ctx.fillStyle = '#4CAF50';
+      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+      this.ctx.strokeStyle = '#45a049';
+      this.ctx.lineWidth = 3;
+      this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = 'bold 20px Arial';
+      this.ctx.fillText('CONTINUE', GAME_CONFIG.canvasWidth / 2, buttonY + 26);
     }
 
     if (gameState.isGameOver) {

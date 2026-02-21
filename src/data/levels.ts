@@ -9,6 +9,7 @@ export const LEVEL_1: LevelData = {
   id: 'level-1',
   name: 'Lily Pond Basics',
   startingMoney: 20,
+  purchaseSlots: 1,
   gridLayout: [
     [CellType.LILYPAD, CellType.EMPTY, CellType.LILYPAD, CellType.EMPTY],
     [CellType.EMPTY, CellType.LILYPAD, CellType.EMPTY, CellType.LILYPAD],

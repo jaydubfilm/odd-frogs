@@ -53,6 +53,9 @@ export class GameEngine {
   private upgradeSystem: UpgradeSystem;
   private aoeEffectSystem: AoeEffectSystem;
 
+  // Callbacks
+  onVictoryContinue: (() => void) | null = null;
+
   // Game loop
   private lastFrameTime: number = 0;
   private animationFrameId: number | null = null;
@@ -304,13 +307,13 @@ export class GameEngine {
     if (!this.gameState.isPaused) {
       this.renderer.renderStreams(this.currentLevel.streams);
       const dropStats = this.dropHighlightFrogType ? FROG_STATS[this.dropHighlightFrogType] : undefined;
-      this.renderer.renderGrid(this.grid, this.selectedLilyCell, this.gameState.money, this.dropHighlightCell, this.getMenuOpacity(this.lilySelectTime), dropStats?.range, dropStats?.minRange);
+      this.renderer.renderGrid(this.grid, this.selectedLilyCell, this.gameState.money, this.dropHighlightCell, this.getMenuOpacity(this.lilySelectTime), dropStats?.range, dropStats?.minRange, dropStats?.ignoresRocks, dropStats?.blockedByFrogs);
       this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
-      this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money, this.getMenuOpacity(this.frogSelectTime), this.upgradeSystem);
       this.renderer.renderFoods(Array.from(this.foods.values()));
       this.renderer.renderAoeEffects(this.aoeEffectSystem.getEffects());
       this.renderer.renderRipples(this.rippleSystem.getRipples());
       this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
+      this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money, this.getMenuOpacity(this.frogSelectTime), this.upgradeSystem);
     }
 
     this.renderer.renderUI(
@@ -353,8 +356,22 @@ export class GameEngine {
     const x = (event.clientX - rect.left) * scaleX;
     const y = (event.clientY - rect.top) * scaleY;
 
-    // Check for restart button click if game is over OR victory
-    if (this.gameState.isGameOver || this.gameState.isVictory) {
+    // Check for continue button click on victory
+    if (this.gameState.isVictory) {
+      const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
+      const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
+      const buttonWidth = 150;
+      const buttonHeight = 40;
+
+      if (x >= buttonX && x <= buttonX + buttonWidth &&
+        y >= buttonY && y <= buttonY + buttonHeight) {
+        if (this.onVictoryContinue) this.onVictoryContinue();
+        return;
+      }
+    }
+
+    // Check for restart button click if game is over
+    if (this.gameState.isGameOver) {
       const buttonX = GAME_CONFIG.canvasWidth / 2 - 75;
       const buttonY = GAME_CONFIG.canvasHeight / 2 + 80;
       const buttonWidth = 150;
@@ -425,60 +442,42 @@ export class GameEngine {
         const level = frog.upgradeState.level;
         const availablePaths = this.upgradeSystem.getAvailablePaths(frog);
 
-        if (level === 0) {
-          // Level 0: show 3 path buttons (V-Stripes, Spots, H-Stripes) + sell
-          // Layout: 3 path buttons in a row above frog, sell button below them
-          const totalWidth = btnSize * 3 + btnGap * 2;
-          const startX = frogPos.x - totalWidth / 2;
-          const pathButtonY = frogPos.y - 50 - btnSize * 2 - btnGap;
-          const sellButtonY = frogPos.y - 50 - btnSize;
+        const arcRadius = 80;
+        const sellBtnX = frogPos.x - btnSize / 2;
+        const sellBtnY = frogPos.y + 45;
 
-          // Check path buttons (V-Stripes, Spots, H-Stripes)
+        // Check sell button (below frog, all levels)
+        if (x >= sellBtnX && x <= sellBtnX + btnSize &&
+          y >= sellBtnY && y <= sellBtnY + btnSize) {
+          this.sellFrog(frog.id);
+          this.deselectFrog();
+          return;
+        }
+
+        if (level === 0) {
+          // Level 0: 3 path buttons in arc above
           const pathOrder = [UpgradePath.VERTICAL_STRIPES, UpgradePath.SPOTS, UpgradePath.HORIZONTAL_STRIPES];
+          const angles = [-2.79, -Math.PI / 2, -0.35];
+
           for (let i = 0; i < 3; i++) {
-            const btnX = startX + i * (btnSize + btnGap);
-            if (x >= btnX && x <= btnX + btnSize &&
-              y >= pathButtonY && y <= pathButtonY + btnSize) {
+            const cx = frogPos.x + arcRadius * Math.cos(angles[i]);
+            const cy = frogPos.y + arcRadius * Math.sin(angles[i]);
+            const bx = cx - btnSize / 2;
+            const by = cy - btnSize / 2;
+            if (x >= bx && x <= bx + btnSize &&
+              y >= by && y <= by + btnSize) {
               this.purchasePathUpgrade(frog.id, pathOrder[i]);
               return;
             }
           }
-
-          // Check sell button (centered below path buttons)
-          const sellBtnX = frogPos.x - btnSize / 2;
-          if (x >= sellBtnX && x <= sellBtnX + btnSize &&
-            y >= sellButtonY && y <= sellButtonY + btnSize) {
-            this.sellFrog(frog.id);
-            this.deselectFrog();
-            return;
-          }
         } else if (level < 3 && availablePaths.length > 0) {
-          // Level 1-2: show 1 upgrade button (locked path) + sell
-          const buttonY = frogPos.y - 50 - btnSize;
-          const upgradeButtonX = frogPos.x - btnSize - btnGap / 2;
+          // Level 1-2: upgrade button centered above
+          const upgradeX = frogPos.x - btnSize / 2;
+          const upgradeY = frogPos.y - arcRadius - btnSize / 2;
 
-          if (x >= upgradeButtonX && x <= upgradeButtonX + btnSize &&
-            y >= buttonY && y <= buttonY + btnSize) {
+          if (x >= upgradeX && x <= upgradeX + btnSize &&
+            y >= upgradeY && y <= upgradeY + btnSize) {
             this.purchasePathUpgrade(frog.id, availablePaths[0]);
-            return;
-          }
-
-          // Sell button (right)
-          const sellButtonX = frogPos.x + btnGap / 2;
-          if (x >= sellButtonX && x <= sellButtonX + btnSize &&
-            y >= buttonY && y <= buttonY + btnSize) {
-            this.sellFrog(frog.id);
-            this.deselectFrog();
-            return;
-          }
-        } else {
-          // Level 3: sell only (centered)
-          const buttonY = frogPos.y - 50 - btnSize;
-          const sellButtonX = frogPos.x - btnSize / 2;
-          if (x >= sellButtonX && x <= sellButtonX + btnSize &&
-            y >= buttonY && y <= buttonY + btnSize) {
-            this.sellFrog(frog.id);
-            this.deselectFrog();
             return;
           }
         }
