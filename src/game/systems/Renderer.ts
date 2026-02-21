@@ -67,7 +67,7 @@ export class Renderer {
     });
   }
 
-  renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number, dropHighlightCell?: GridPosition | null, menuOpacity: number = 1): void {
+  renderGrid(grid: GridCell[][], hoveredCell: GridPosition | null, money: number, dropHighlightCell?: GridPosition | null, menuOpacity: number = 1, dropHighlightRange?: number, dropHighlightMinRange?: number): void {
     grid.forEach(row => {
       row.forEach(cell => {
         this.renderCell(cell);
@@ -77,7 +77,7 @@ export class Renderer {
           cell.gridPosition.col === dropHighlightCell.col &&
           cell.type === CellType.LILYPAD &&
           cell.frog === null) {
-          this.renderDropHighlight(cell);
+          this.renderDropHighlight(cell, dropHighlightRange, dropHighlightMinRange);
         }
 
         if (hoveredCell &&
@@ -94,18 +94,43 @@ export class Renderer {
     });
   }
 
-  private renderDropHighlight(cell: GridCell): void {
+  private renderDropHighlight(cell: GridCell, range?: number, minRange?: number): void {
     const { x, y } = cell.position;
-    const size = GAME_CONFIG.cellSize * 0.5;
+    const rangeRadius = range ? range * GAME_CONFIG.cellSize : GAME_CONFIG.cellSize * 0.5 + 2;
+    const minRangeRadius = minRange ? minRange * GAME_CONFIG.cellSize : 0;
 
     this.ctx.save();
+
+    // Fill the valid attack area
+    this.ctx.fillStyle = 'rgba(255, 215, 0, 0.1)';
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, rangeRadius, 0, Math.PI * 2);
+    if (minRangeRadius > 0) {
+      this.ctx.moveTo(x + minRangeRadius, y);
+      this.ctx.arc(x, y, minRangeRadius, 0, Math.PI * 2, true);
+    }
+    this.ctx.fill();
+
+    // Outer range stroke
     this.ctx.strokeStyle = '#FFD700';
     this.ctx.lineWidth = 3;
     this.ctx.shadowColor = '#FFD700';
     this.ctx.shadowBlur = 12;
     this.ctx.beginPath();
-    this.ctx.arc(x, y, size + 2, 0, Math.PI * 2);
+    this.ctx.arc(x, y, rangeRadius, 0, Math.PI * 2);
     this.ctx.stroke();
+
+    // Inner dead zone stroke
+    if (minRangeRadius > 0) {
+      this.ctx.shadowBlur = 0;
+      this.ctx.strokeStyle = 'rgba(255, 80, 80, 0.6)';
+      this.ctx.lineWidth = 2;
+      this.ctx.setLineDash([6, 4]);
+      this.ctx.beginPath();
+      this.ctx.arc(x, y, minRangeRadius, 0, Math.PI * 2);
+      this.ctx.stroke();
+    }
+
     this.ctx.restore();
   }
 
@@ -202,6 +227,32 @@ export class Renderer {
 
     const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
     const pos = cell.position;
+
+    // Draw range circle
+    const rangeRadius = frog.stats.range * GAME_CONFIG.cellSize;
+    const minRangeRadius = (frog.stats.minRange ?? 0) * GAME_CONFIG.cellSize;
+    this.ctx.fillStyle = 'rgba(255, 215, 0, 0.1)';
+    this.ctx.beginPath();
+    this.ctx.arc(pos.x, pos.y, rangeRadius, 0, Math.PI * 2);
+    if (minRangeRadius > 0) {
+      this.ctx.moveTo(pos.x + minRangeRadius, pos.y);
+      this.ctx.arc(pos.x, pos.y, minRangeRadius, 0, Math.PI * 2, true);
+    }
+    this.ctx.fill();
+    this.ctx.strokeStyle = 'rgba(255, 215, 0, 0.6)';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.ctx.arc(pos.x, pos.y, rangeRadius, 0, Math.PI * 2);
+    this.ctx.stroke();
+    if (minRangeRadius > 0) {
+      this.ctx.strokeStyle = 'rgba(255, 80, 80, 0.6)';
+      this.ctx.setLineDash([6, 4]);
+      this.ctx.beginPath();
+      this.ctx.arc(pos.x, pos.y, minRangeRadius, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.setLineDash([]);
+    }
+
     const buttonSize = 60;
     const btnGap = 16;
     const level = frog.upgradeState.level;
@@ -981,6 +1032,23 @@ export class Renderer {
       this.ctx.font = 'bold 20px Arial';
       this.ctx.fillText('RESTART', GAME_CONFIG.canvasWidth / 2, buttonY + 26);
     }
+  }
+
+  renderAoeEffects(effects: { x: number; y: number; radius: number; opacity: number }[]): void {
+    effects.forEach(e => {
+      this.ctx.save();
+      this.ctx.globalAlpha = e.opacity;
+      this.ctx.fillStyle = 'rgba(255, 80, 40, 0.3)';
+      this.ctx.beginPath();
+      this.ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.strokeStyle = 'rgba(255, 120, 50, 0.8)';
+      this.ctx.lineWidth = 3;
+      this.ctx.beginPath();
+      this.ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.restore();
+    });
   }
 
   renderRipples(ripples: { x: number; y: number; radius: number; opacity: number }[]): void {

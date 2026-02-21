@@ -14,7 +14,7 @@ interface GameCanvasProps {
 
 export interface GameCanvasHandle {
   placeFrogAtScreenPos: (screenX: number, screenY: number, frogType: FrogType) => boolean;
-  updateDragHighlight: (screenX: number, screenY: number) => void;
+  updateDragHighlight: (screenX: number, screenY: number, frogType?: FrogType) => void;
   clearDragHighlight: () => void;
   getCanvasRect: () => DOMRect | null;
 }
@@ -58,11 +58,11 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
       engine.setDropHighlight(null);
       return engine.placeFrog(gridPos, frogType);
     },
-    updateDragHighlight(screenX: number, screenY: number): void {
+    updateDragHighlight(screenX: number, screenY: number, frogType?: FrogType): void {
       const engine = gameEngineRef.current;
       if (!engine) return;
       const gridPos = screenToGrid(screenX, screenY);
-      engine.setDropHighlight(gridPos);
+      engine.setDropHighlight(gridPos, frogType ?? null);
     },
     clearDragHighlight(): void {
       const engine = gameEngineRef.current;

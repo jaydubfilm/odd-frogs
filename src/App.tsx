@@ -223,7 +223,7 @@ function App() {
     if (!dragging) return;
     setDragging(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
     if (gameCanvasRef.current) {
-      gameCanvasRef.current.updateDragHighlight(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY));
+      gameCanvasRef.current.updateDragHighlight(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY), dragging.frogType);
     }
   }, [dragging, handedness]);
 

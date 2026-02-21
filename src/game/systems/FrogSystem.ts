@@ -3,6 +3,7 @@ import { UpgradePath } from '../../types/upgrades';
 import { FROG_STATS, GAME_CONFIG } from '@data/constants';
 import { AudioManager } from './AudioManager';
 import { UpgradeSystem } from './UpgradeSystem';
+import { AoeEffectSystem } from './AoeEffectSystem';
 
 export class FrogSystem {
   private frogIdCounter = 0;
@@ -45,17 +46,19 @@ export class FrogSystem {
     let priorityFood: FoodData | null = null;
     let maxDistanceTraveled = -1;
 
+    const minRangePixels = (frog.stats.minRange ?? 0) * GAME_CONFIG.cellSize;
+
     foods.forEach(food => {
-      // Check if line of sight is blocked by rocks
-      if (this.isLineOfSightBlocked(frogPos, food.position, grid, frog.gridPosition)) {
+      // Check line of sight: blocked by rocks (unless frog ignores rocks) or by other frogs
+      if (this.isLineOfSightBlocked(frogPos, food.position, grid, frog.gridPosition, frog)) {
         return;
       }
 
       const distance = this.getDistance(frogPos, food.position);
       const rangeInPixels = effectiveRange * GAME_CONFIG.cellSize;
 
-      // Only consider food within range
-      if (distance <= rangeInPixels) {
+      // Only consider food within range and outside min range
+      if (distance <= rangeInPixels && distance >= minRangePixels) {
         // Prioritize food that has traveled the farthest (closest to end)
         if (food.distanceTraveled > maxDistanceTraveled) {
           priorityFood = food;
@@ -71,7 +74,8 @@ export class FrogSystem {
     frogPos: { x: number; y: number },
     foodPos: { x: number; y: number },
     grid: GridCell[][],
-    frogGridPos?: GridPosition
+    frogGridPos?: GridPosition,
+    shootingFrog?: FrogData
   ): boolean {
     const steps = 10;
     const dx = (foodPos.x - frogPos.x) / steps;
@@ -88,7 +92,10 @@ export class FrogSystem {
       if (frogGridPos && gridPos.row === frogGridPos.row && gridPos.col === frogGridPos.col) continue;
 
       const cell = grid[gridPos.row]?.[gridPos.col];
-      if (cell && cell.type === 'ROCK') {
+      if (cell && cell.type === 'ROCK' && !shootingFrog?.stats.ignoresRocks) {
+        return true;
+      }
+      if (cell && cell.frog && shootingFrog?.stats.blockedByFrogs) {
         return true;
       }
     }
@@ -96,18 +103,100 @@ export class FrogSystem {
     return false;
   }
 
-  private attackFood(frog: FrogData, food: FoodData, effectiveDamage: number): void {
-    food.currentHealth -= effectiveDamage;
-    if (food.currentHealth < 0) {
-      food.currentHealth = 0;
+  private findOptimalAoeCenter(
+    primaryTarget: FoodData,
+    foods: Map<string, FoodData>,
+    aoeRadiusPixels: number
+  ): { x: number; y: number } {
+    const candidates: { x: number; y: number }[] = [];
+
+    // Try each food position as a candidate AoE center
+    foods.forEach(food => {
+      // Center must keep primary target within AoE radius
+      if (this.getDistance(food.position, primaryTarget.position) <= aoeRadiusPixels) {
+        candidates.push({ ...food.position });
+      }
+    });
+
+    // Fallback to primary target position
+    if (candidates.length === 0) {
+      return { ...primaryTarget.position };
     }
 
-    frog.tongue = {
-      active: true,
-      targetPosition: { ...food.position },
-      progress: 0,
-      startTime: performance.now() / 1000
-    };
+    let bestCenter = { ...primaryTarget.position };
+    let bestCount = 0;
+
+    for (const center of candidates) {
+      let count = 0;
+      foods.forEach(food => {
+        if (this.getDistance(center, food.position) <= aoeRadiusPixels) {
+          count++;
+        }
+      });
+      if (count > bestCount) {
+        bestCount = count;
+        bestCenter = center;
+      }
+    }
+
+    return bestCenter;
+  }
+
+  private attackFood(frog: FrogData, food: FoodData, effectiveDamage: number, foods?: Map<string, FoodData>, aoeEffectSystem?: AoeEffectSystem): void {
+    const aoeRadius = frog.stats.aoeRadius;
+    const aoePixels = aoeRadius ? aoeRadius * GAME_CONFIG.cellSize : 0;
+
+    if (aoeRadius && foods) {
+      // Find optimal AoE center that maximizes hits while including primary target
+      const center = this.findOptimalAoeCenter(food, foods, aoePixels);
+
+      // Damage all foods within AoE radius of the center
+      foods.forEach(target => {
+        if (this.getDistance(center, target.position) <= aoePixels) {
+          target.currentHealth -= effectiveDamage;
+          if (target.currentHealth < 0) target.currentHealth = 0;
+        }
+      });
+
+      // Tongue aims at AoE center
+      frog.tongue = {
+        active: true,
+        targetPosition: { ...center },
+        progress: 0,
+        startTime: performance.now() / 1000
+      };
+
+      // Trigger AoE visual
+      if (aoeEffectSystem) {
+        aoeEffectSystem.add(center.x, center.y, aoePixels);
+      }
+    } else if (frog.stats.slowAmount) {
+      // Slow effect - no damage, just reduce speed
+      const currentTime = performance.now() / 1000;
+      const slowDuration = 1 / (frog.stats.attackSpeed || 1);
+      food.slowEffect = {
+        multiplier: frog.stats.slowAmount,
+        endTime: currentTime + slowDuration + 0.5,
+      };
+
+      frog.tongue = {
+        active: true,
+        targetPosition: { ...food.position },
+        progress: 0,
+        startTime: currentTime
+      };
+    } else {
+      // Normal single-target attack
+      food.currentHealth -= effectiveDamage;
+      if (food.currentHealth < 0) food.currentHealth = 0;
+
+      frog.tongue = {
+        active: true,
+        targetPosition: { ...food.position },
+        progress: 0,
+        startTime: performance.now() / 1000
+      };
+    }
 
     // Play slurp sound
     if (this.audioManager) {
@@ -140,7 +229,8 @@ export class FrogSystem {
     foods: Map<string, FoodData>,
     grid: GridCell[][],
     _deltaTime: number,
-    upgradeSystem: UpgradeSystem
+    upgradeSystem: UpgradeSystem,
+    aoeEffectSystem?: AoeEffectSystem
   ): void {
     const currentTime = performance.now() / 1000;
 
@@ -161,7 +251,7 @@ export class FrogSystem {
         const attackInterval = 1 / effective.attackSpeed;
 
         if (timeSinceLastAttack >= attackInterval) {
-          this.attackFood(frog, target, effective.damage);
+          this.attackFood(frog, target, effective.damage, foods, aoeEffectSystem);
           frog.lastAttackTime = currentTime;
         }
       } else {

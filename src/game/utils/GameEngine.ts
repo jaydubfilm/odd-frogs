@@ -9,7 +9,7 @@ import {
   CellType,
 } from '../../types/game';
 import { UpgradePath } from '../../types/upgrades';
-import { GAME_CONFIG, UPGRADE_PATH_COSTS } from '@data/constants';
+import { GAME_CONFIG, UPGRADE_PATH_COSTS, FROG_STATS } from '@data/constants';
 import { Renderer } from './../systems/Renderer';
 import { FrogSystem } from './../systems/FrogSystem';
 import { FoodSystem } from './../systems/FoodSystem';
@@ -19,6 +19,7 @@ import { AudioManager } from './../systems/AudioManager';
 import { FloatingTextSystem } from './../systems/FloatingTextSystem';
 import { RippleSystem } from './../systems/RippleSystem';
 import { UpgradeSystem } from './../systems/UpgradeSystem';
+import { AoeEffectSystem } from './../systems/AoeEffectSystem';
 
 
 export class GameEngine {
@@ -36,6 +37,7 @@ export class GameEngine {
   private lilySelectTimer: ReturnType<typeof setTimeout> | null = null;
   private lilySelectTime: number = 0;
   private dropHighlightCell: GridPosition | null = null;
+  private dropHighlightFrogType: FrogType | null = null;
   private frogSelectTimer: ReturnType<typeof setTimeout> | null = null;
   private frogSelectTime: number = 0;
 
@@ -49,6 +51,7 @@ export class GameEngine {
   private collisionSystem: CollisionSystem;
   private waveSystem: WaveSystem;
   private upgradeSystem: UpgradeSystem;
+  private aoeEffectSystem: AoeEffectSystem;
 
   // Game loop
   private lastFrameTime: number = 0;
@@ -89,6 +92,7 @@ export class GameEngine {
     this.collisionSystem = new CollisionSystem();
     this.waveSystem = new WaveSystem(this.foodSystem);
     this.upgradeSystem = new UpgradeSystem();
+    this.aoeEffectSystem = new AoeEffectSystem();
 
     // Setup canvas
     this.canvas.width = GAME_CONFIG.canvasWidth;
@@ -269,7 +273,7 @@ export class GameEngine {
     this.foodSystem.updateFoods(this.foods, this.currentLevel.streams, deltaTime);
 
     // Update frog attacks (with upgrade system for effective stats)
-    this.frogSystem.updateFrogs(this.frogs, this.foods, this.grid, deltaTime, this.upgradeSystem);
+    this.frogSystem.updateFrogs(this.frogs, this.foods, this.grid, deltaTime, this.upgradeSystem, this.aoeEffectSystem);
 
     // Check for collisions and damage
     this.collisionSystem.checkCollisions(this.frogs, this.foods);
@@ -282,6 +286,9 @@ export class GameEngine {
 
     // Update ripples
     this.rippleSystem.update();
+
+    // Update AoE effects
+    this.aoeEffectSystem.update();
 
     // Check for foods that reached the end
     this.checkFoodsReachedEnd();
@@ -296,10 +303,12 @@ export class GameEngine {
 
     if (!this.gameState.isPaused) {
       this.renderer.renderStreams(this.currentLevel.streams);
-      this.renderer.renderGrid(this.grid, this.selectedLilyCell, this.gameState.money, this.dropHighlightCell, this.getMenuOpacity(this.lilySelectTime));
+      const dropStats = this.dropHighlightFrogType ? FROG_STATS[this.dropHighlightFrogType] : undefined;
+      this.renderer.renderGrid(this.grid, this.selectedLilyCell, this.gameState.money, this.dropHighlightCell, this.getMenuOpacity(this.lilySelectTime), dropStats?.range, dropStats?.minRange);
       this.renderer.renderFrogs(Array.from(this.frogs.values()), this.grid);
       this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money, this.getMenuOpacity(this.frogSelectTime), this.upgradeSystem);
       this.renderer.renderFoods(Array.from(this.foods.values()));
+      this.renderer.renderAoeEffects(this.aoeEffectSystem.getEffects());
       this.renderer.renderRipples(this.rippleSystem.getRipples());
       this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
     }
@@ -674,8 +683,9 @@ export class GameEngine {
     return Math.max(0, 1 - fadeElapsed / GameEngine.MENU_FADE_MS);
   }
 
-  setDropHighlight(gridPos: GridPosition | null): void {
+  setDropHighlight(gridPos: GridPosition | null, frogType?: FrogType | null): void {
     this.dropHighlightCell = gridPos;
+    this.dropHighlightFrogType = frogType ?? null;
   }
 
   getGridCell(row: number, col: number): GridCell | null {

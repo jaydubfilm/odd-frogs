@@ -38,8 +38,19 @@ export class FoodSystem {
     const stream = streams.find(s => s.id === food.streamId);
     if (!stream?.smoothPath) return;
 
+    // Apply slow effect
+    let speed = food.stats.speed;
+    if (food.slowEffect) {
+      const now = performance.now() / 1000;
+      if (now < food.slowEffect.endTime) {
+        speed *= food.slowEffect.multiplier;
+      } else {
+        food.slowEffect = undefined;
+      }
+    }
+
     // Update distance traveled
-    food.distanceTraveled += food.stats.speed * deltaTime;
+    food.distanceTraveled += speed * deltaTime;
 
     // Get position on the smooth path
     const result = PathGenerator.getPositionAtDistance(

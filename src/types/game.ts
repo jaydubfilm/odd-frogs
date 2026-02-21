@@ -67,6 +67,11 @@ export interface FrogStats {
   damage: number;
   attackSpeed: number; // attacks per second
   range: number; // in grid units
+  minRange?: number; // minimum range in grid units (dead zone)
+  ignoresRocks?: boolean; // can shoot over rocks
+  blockedByFrogs?: boolean; // other frogs block line of sight
+  aoeRadius?: number; // area of effect radius in grid units
+  slowAmount?: number; // speed reduction multiplier (0.5 = 50% slower)
   cost: number;
   color: string;
 }
@@ -114,6 +119,7 @@ export interface FoodData {
   };
   currentHealth: number;         // ← ADD if missing
   reachedEnd?: boolean;          // ← ADD (optional flag)
+  slowEffect?: { multiplier: number; endTime: number };
 }
 
 export interface PathSegment {
