@@ -158,6 +158,7 @@ export interface GameState {
   selectedFrog: string | null;
   gameSpeed: number;
   showConsumables: boolean;
+  hasConsumables: boolean;
 }
 
 export interface LevelData {

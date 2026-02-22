@@ -120,6 +120,7 @@ function App() {
     selectedGridCell: null,
     gameSpeed: 1,
     showConsumables: false,
+    hasConsumables: CONSUMABLE_CONFIG.STARTING_COUNT > 0,
   });
 
   const [waveInfo, setWaveInfo] = useState({
@@ -172,6 +173,7 @@ function App() {
       selectedGridCell: null,
       gameSpeed: 1,
       showConsumables: false,
+      hasConsumables: CONSUMABLE_CONFIG.STARTING_COUNT > 0,
     });
 
     // Reset consumables for new level
@@ -282,7 +284,9 @@ function App() {
 
   const handleGameStateChange = (newState: GameState) => {
     setGameState(newState);
-    setShowConsumables(newState.showConsumables);
+    const shouldShow = hasAnyConsumables && newState.showConsumables;
+    setShowConsumables(shouldShow);
+    if (!shouldShow) setActiveConsumable(null);
   };
 
   const handleWaveInfoChange = (newWaveInfo: { current: number; total: number; timeUntilNext: number }) => {
@@ -336,7 +340,7 @@ function App() {
         [type]: { count: prev[type].count - 1, cooldownUntil: Date.now() + CONSUMABLE_CONFIG.COOLDOWN_MS },
       }));
     } else if (type === ConsumableType.WHIRLPOOL) {
-      setActiveConsumable(ConsumableType.WHIRLPOOL);
+      setActiveConsumable(prev => prev === ConsumableType.WHIRLPOOL ? null : ConsumableType.WHIRLPOOL);
     }
   }, [consumables]);
 
@@ -353,6 +357,23 @@ function App() {
     }, 1000);
     return () => clearInterval(interval);
   }, [showConsumables]);
+
+  const hasAnyConsumables = Object.values(consumables).some(inv => inv.count > 0);
+  const isConsumableReady = Object.values(consumables).some(
+    inv => inv.count > 0 && (inv.cooldownUntil <= 0 || Date.now() >= inv.cooldownUntil)
+  );
+
+  const handleConsumablePlaced = useCallback((type: string) => {
+    const cType = type as ConsumableType;
+    setConsumables(prev => ({
+      ...prev,
+      [cType]: {
+        count: prev[cType].count - 1,
+        cooldownUntil: Date.now() + CONSUMABLE_CONFIG.COOLDOWN_MS,
+      },
+    }));
+    setActiveConsumable(null);
+  }, []);
 
   const handlePointerMoveDrag = useCallback((e: React.PointerEvent) => {
     if (dragging) {
@@ -465,17 +486,22 @@ function App() {
                 onLevelComplete={handleLevelComplete}
                 onBackToMap={handleBackToMap}
                 handedness={handedness}
+                hasConsumables={hasAnyConsumables}
+                consumableReady={isConsumableReady}
+                activeConsumable={activeConsumable}
+                onConsumablePlaced={handleConsumablePlaced}
               />
             </div>
 
             {/* Mobile: Frog/Consumable selector at bottom */}
             <div className="lg:hidden flex-shrink-0 pb-1">
-              {showConsumables ? (
+              {showConsumables && hasAnyConsumables ? (
                 <ConsumableSelector
                   consumableState={consumables}
                   onUseConsumable={handleUseConsumable}
                   onDragStart={handleConsumableDragStart}
                   draggingConsumable={draggingConsumable?.type ?? null}
+                  activeConsumable={activeConsumable}
                   handedness={handedness}
                 />
               ) : (
@@ -494,12 +520,13 @@ function App() {
             {/* Desktop: Side panels */}
             <div className="hidden lg:flex flex-row gap-6 justify-center">
               <div className="w-80">
-                {showConsumables ? (
+                {showConsumables && hasAnyConsumables ? (
                   <ConsumableSelector
                     consumableState={consumables}
                     onUseConsumable={handleUseConsumable}
                     onDragStart={handleConsumableDragStart}
                     draggingConsumable={draggingConsumable?.type ?? null}
+                    activeConsumable={activeConsumable}
                     handedness={handedness}
                   />
                 ) : (

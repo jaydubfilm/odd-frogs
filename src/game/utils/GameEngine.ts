@@ -22,6 +22,7 @@ import { UpgradeSystem } from './../systems/UpgradeSystem';
 import { AoeEffectSystem } from './../systems/AoeEffectSystem';
 import { SynergyVisualSystem } from './../systems/SynergyVisualSystem';
 import { ConsumableSystem } from './../systems/ConsumableSystem';
+import { HeartFloatSystem } from './../systems/HeartFloatSystem';
 
 
 export class GameEngine {
@@ -56,6 +57,7 @@ export class GameEngine {
   private aoeEffectSystem: AoeEffectSystem;
   private synergyVisualSystem: SynergyVisualSystem;
   private consumableSystem: ConsumableSystem;
+  private heartFloatSystem: HeartFloatSystem;
   private whirlpoolHighlight: { x: number; y: number } | null = null;
 
   // Callbacks
@@ -89,6 +91,7 @@ export class GameEngine {
       selectedFrog: null,
       gameSpeed: 1,
       showConsumables: false,
+      hasConsumables: true,
     };
 
     // Initialize systems
@@ -105,6 +108,7 @@ export class GameEngine {
     this.aoeEffectSystem = new AoeEffectSystem();
     this.synergyVisualSystem = new SynergyVisualSystem();
     this.consumableSystem = new ConsumableSystem();
+    this.heartFloatSystem = new HeartFloatSystem();
 
     // Setup canvas
     this.canvas.width = GAME_CONFIG.canvasWidth;
@@ -132,6 +136,7 @@ export class GameEngine {
     this.gameState.gameSpeed = 1;
     this.gameState.currentLevel = 1;
     this.gameState.showConsumables = false;
+    this.gameState.hasConsumables = true;
 
     // Initialize grid from level layout
     this.initializeGrid(level);
@@ -307,6 +312,9 @@ export class GameEngine {
     // Update consumable effects
     this.consumableSystem.update(deltaTime, this.foods);
 
+    // Update heart float particles
+    this.heartFloatSystem.update();
+
     // Check for foods that reached the end
     this.checkFoodsReachedEnd();
   }
@@ -331,6 +339,7 @@ export class GameEngine {
       this.renderer.renderRainEffect(this.consumableSystem.getRainEffect());
       this.renderer.renderRipples(this.rippleSystem.getRipples());
       this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
+      this.renderer.renderHeartFloats(this.heartFloatSystem.getHearts());
       this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money, this.getMenuOpacity(this.frogSelectTime), this.upgradeSystem);
     }
 
@@ -343,13 +352,13 @@ export class GameEngine {
     );
 
     // Consumable toggle button (4th slot in button column)
-    if (!this.gameState.isGameOver && !this.gameState.isVictory && !this.gameState.isPaused) {
+    if (!this.gameState.isGameOver && !this.gameState.isVictory && !this.gameState.isPaused && this.gameState.hasConsumables) {
       const btnSize = 60;
       const gap = 15;
       const isLeft = this.handedness === 'left';
       const baseX = isLeft ? 5 : GAME_CONFIG.canvasWidth - btnSize - 5;
       const toggleY = GAME_CONFIG.canvasHeight - btnSize - 10;
-      this.renderer.renderConsumableToggle(baseX, toggleY, btnSize, this.gameState.showConsumables);
+      this.renderer.renderConsumableToggle(baseX, toggleY, btnSize, this.gameState.showConsumables, this.consumableReady);
     }
   }
 
@@ -476,10 +485,22 @@ export class GameEngine {
     }
 
     // Check for consumable toggle button (bottom of button column)
-    const toggleY = GAME_CONFIG.canvasHeight - uiButtonSize - 10;
-    if (x >= baseX && x <= baseX + uiButtonSize &&
-      y >= toggleY && y <= toggleY + uiButtonSize) {
-      this.gameState.showConsumables = !this.gameState.showConsumables;
+    if (this.gameState.hasConsumables) {
+      const toggleY = GAME_CONFIG.canvasHeight - uiButtonSize - 10;
+      if (x >= baseX && x <= baseX + uiButtonSize &&
+        y >= toggleY && y <= toggleY + uiButtonSize) {
+        this.gameState.showConsumables = !this.gameState.showConsumables;
+        return;
+      }
+    }
+
+    // Place active consumable on canvas click
+    if (this.activeConsumable && this.onConsumablePlaced) {
+      if (this.activeConsumable === 'WHIRLPOOL') {
+        this.consumableSystem.addWhirlpool(x, y);
+      }
+      this.onConsumablePlaced(this.activeConsumable, x, y);
+      this.activeConsumable = null;
       return;
     }
 
@@ -711,6 +732,23 @@ export class GameEngine {
     this.handedness = handedness;
   }
 
+  setHasConsumables(has: boolean): void {
+    this.gameState.hasConsumables = has;
+    if (!has) this.gameState.showConsumables = false;
+  }
+
+  private consumableReady = false;
+  private activeConsumable: string | null = null;
+  onConsumablePlaced: ((type: string, canvasX: number, canvasY: number) => void) | null = null;
+
+  setConsumableReady(ready: boolean): void {
+    this.consumableReady = ready;
+  }
+
+  setActiveConsumable(type: string | null): void {
+    this.activeConsumable = type;
+  }
+
   private static readonly MENU_VISIBLE_MS = 3500;
   private static readonly MENU_FADE_MS = 1000;
 
@@ -824,6 +862,16 @@ export class GameEngine {
 
   applyHeal(): void {
     this.consumableSystem.applyHeal(this.gameState);
+    this.triggerHealEffect();
+  }
+
+  triggerHealEffect(): void {
+    // Hearts fly from bottom-center toward top-left (where lives display is)
+    const startX = GAME_CONFIG.canvasWidth / 2;
+    const startY = GAME_CONFIG.canvasHeight - 30;
+    const targetX = 50;
+    const targetY = 30;
+    this.heartFloatSystem.add(startX, startY, targetX, targetY);
   }
 
   placeWhirlpool(px: number, py: number): void {

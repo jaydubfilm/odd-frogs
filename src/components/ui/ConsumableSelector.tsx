@@ -7,6 +7,7 @@ interface ConsumableSelectorProps {
   onUseConsumable: (type: ConsumableType) => void;
   onDragStart?: (type: ConsumableType, startX: number, startY: number) => void;
   draggingConsumable: ConsumableType | null;
+  activeConsumable: ConsumableType | null;
   handedness?: 'left' | 'right';
 }
 
@@ -53,6 +54,7 @@ export const ConsumableSelector = ({
   onUseConsumable,
   onDragStart,
   draggingConsumable,
+  activeConsumable,
   handedness = 'right',
 }: ConsumableSelectorProps) => {
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
@@ -107,6 +109,7 @@ export const ConsumableSelector = ({
             : 0;
           const disabled = inv.count <= 0 || onCooldown;
           const isDragging = draggingConsumable === type;
+          const isSelected = activeConsumable === type;
 
           return (
             <button
@@ -118,7 +121,7 @@ export const ConsumableSelector = ({
               className={`
                 relative flex flex-col items-center gap-1 p-2 rounded-lg touch-none overflow-hidden
                 ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 cursor-pointer'}
-                bg-white border-2 border-gray-300
+                ${isSelected ? 'bg-indigo-100 border-2 border-indigo-500 ring-2 ring-indigo-300' : 'bg-white border-2 border-gray-300'}
               `}
             >
               <div className="w-12 h-12 flex items-center justify-center">

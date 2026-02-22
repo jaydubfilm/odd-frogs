@@ -11,6 +11,10 @@ interface GameCanvasProps {
   onLevelComplete?: () => void;
   onBackToMap?: () => void;
   handedness?: 'left' | 'right';
+  hasConsumables?: boolean;
+  consumableReady?: boolean;
+  activeConsumable?: string | null;
+  onConsumablePlaced?: (type: string, canvasX: number, canvasY: number) => void;
 }
 
 export interface GameCanvasHandle {
@@ -20,6 +24,7 @@ export interface GameCanvasHandle {
   getCanvasRect: () => DOMRect | null;
   applyRain: () => void;
   applyHeal: () => void;
+  triggerHealEffect: () => void;
   placeWhirlpoolAtScreenPos: (screenX: number, screenY: number) => void;
   updateWhirlpoolHighlight: (screenX: number, screenY: number) => void;
   clearWhirlpoolHighlight: () => void;
@@ -32,7 +37,11 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
   onWaveInfoChange,
   onLevelComplete,
   onBackToMap,
-  handedness = 'right'
+  handedness = 'right',
+  hasConsumables = true,
+  consumableReady = false,
+  activeConsumable = null,
+  onConsumablePlaced,
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameEngineRef = useRef<GameEngine | null>(null);
@@ -97,6 +106,9 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
     applyHeal(): void {
       gameEngineRef.current?.applyHeal();
     },
+    triggerHealEffect(): void {
+      gameEngineRef.current?.triggerHealEffect();
+    },
     placeWhirlpoolAtScreenPos(screenX: number, screenY: number): void {
       const engine = gameEngineRef.current;
       if (!engine) return;
@@ -158,6 +170,30 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
       gameEngineRef.current.setHandedness(handedness);
     }
   }, [handedness]);
+
+  useEffect(() => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.setHasConsumables(hasConsumables);
+    }
+  }, [hasConsumables]);
+
+  useEffect(() => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.setConsumableReady(consumableReady);
+    }
+  }, [consumableReady]);
+
+  useEffect(() => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.setActiveConsumable(activeConsumable ?? null);
+    }
+  }, [activeConsumable]);
+
+  useEffect(() => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.onConsumablePlaced = onConsumablePlaced ?? null;
+    }
+  }, [onConsumablePlaced]);
 
   // Expose game engine state to parent component
   useEffect(() => {

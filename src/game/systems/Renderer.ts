@@ -4,6 +4,7 @@ import { COLORS, GAME_CONFIG, UPGRADE_PATH_COSTS, CONSUMABLE_CONFIG } from '@dat
 import { UpgradeSystem } from './UpgradeSystem';
 import { SynergyConnection } from './SynergyVisualSystem';
 import { WhirlpoolEffect, RainEffect } from './ConsumableSystem';
+import { HeartParticle } from './HeartFloatSystem';
 
 export class Renderer {
   private hasLoggedStreams = false;
@@ -1370,6 +1371,33 @@ export class Renderer {
     });
   }
 
+  renderHeartFloats(hearts: HeartParticle[]): void {
+    hearts.forEach(h => {
+      if (h.scale <= 0 || h.opacity <= 0) return;
+      this.ctx.save();
+      this.ctx.globalAlpha = h.opacity;
+      this.ctx.translate(h.x, h.y);
+      this.ctx.scale(h.scale, h.scale);
+
+      // Heart shape path
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, -4);
+      this.ctx.bezierCurveTo(-8, -14, -18, -6, -10, 4);
+      this.ctx.lineTo(0, 14);
+      this.ctx.lineTo(10, 4);
+      this.ctx.bezierCurveTo(18, -6, 8, -14, 0, -4);
+      this.ctx.closePath();
+
+      this.ctx.fillStyle = '#EF4444';
+      this.ctx.fill();
+      this.ctx.strokeStyle = '#B91C1C';
+      this.ctx.lineWidth = 1.5;
+      this.ctx.stroke();
+
+      this.ctx.restore();
+    });
+  }
+
   private renderLilyRemovalTooltip(
     cell: GridCell,
     canAfford: boolean
@@ -1465,24 +1493,66 @@ export class Renderer {
     const elapsed = Date.now() - rainEffect.createdAt;
     if (elapsed > rainEffect.duration) return;
 
-    const alpha = Math.max(0, 1 - elapsed / rainEffect.duration) * 0.6;
+    const progress = elapsed / rainEffect.duration;
+    const w = GAME_CONFIG.canvasWidth;
+    const h = GAME_CONFIG.canvasHeight;
 
     this.ctx.save();
+
+    // Persistent dark overlay that fades with the effect
+    const overlayAlpha = (progress < 0.7 ? 0.25 : 0.25 * (1 - (progress - 0.7) / 0.3));
+    this.ctx.fillStyle = `rgba(20, 40, 80, ${overlayAlpha})`;
+    this.ctx.fillRect(0, 0, w, h);
+
+    // Blue-tinted overlay flash at the start
+    if (progress < 0.2) {
+      const flashAlpha = (1 - progress / 0.2) * 0.35;
+      this.ctx.fillStyle = `rgba(60, 130, 255, ${flashAlpha})`;
+      this.ctx.fillRect(0, 0, w, h);
+    }
+
+    // Animated falling rain streaks
+    const alpha = progress < 0.7 ? 1.0 : 1.0 * (1 - (progress - 0.7) / 0.3);
     this.ctx.globalAlpha = alpha;
-    this.ctx.strokeStyle = 'rgba(100, 180, 255, 0.7)';
-    this.ctx.lineWidth = 1.5;
     this.ctx.lineCap = 'round';
 
-    // Rain streaks across the whole canvas
     const seed = rainEffect.createdAt;
-    for (let i = 0; i < 60; i++) {
-      const x = ((seed * 7 + i * 37) % GAME_CONFIG.canvasWidth);
-      const y = ((seed * 13 + i * 53) % GAME_CONFIG.canvasHeight);
-      const len = 12 + (i % 8);
+    const timeOffset = elapsed * 0.8; // faster falling speed
+
+    for (let i = 0; i < 300; i++) {
+      const baseX = ((seed * 7 + i * 37) % w);
+      const baseY = ((seed * 13 + i * 53) % (h + 60)) - 60;
+      const len = 18 + (i % 14) * 2;
+      const thickness = 1.5 + (i % 3) * 0.7;
+      const speed = 0.8 + (i % 5) * 0.12;
+
+      const y = (baseY + timeOffset * speed) % (h + 60) - 30;
+      const x = baseX - 2;
+
+      this.ctx.strokeStyle = `rgba(140, 200, 255, ${0.5 + (i % 4) * 0.15})`;
+      this.ctx.lineWidth = thickness;
       this.ctx.beginPath();
       this.ctx.moveTo(x, y);
-      this.ctx.lineTo(x - 2, y + len);
+      this.ctx.lineTo(x - 3, y + len);
       this.ctx.stroke();
+
+      // Splash dots at bottom of some streaks
+      if (i % 3 === 0 && y + len > h - 30) {
+        const splashAlpha = Math.max(0, 1 - (y + len - (h - 30)) / 30) * alpha;
+        this.ctx.globalAlpha = splashAlpha;
+        this.ctx.fillStyle = 'rgba(150, 210, 255, 0.8)';
+        this.ctx.beginPath();
+        this.ctx.arc(x - 3, y + len, 2, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Small side splashes
+        this.ctx.beginPath();
+        this.ctx.arc(x - 6, y + len - 1, 1.2, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(x, y + len - 1, 1.2, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = alpha;
+      }
     }
 
     this.ctx.restore();
@@ -1509,7 +1579,7 @@ export class Renderer {
     this.ctx.restore();
   }
 
-  renderConsumableToggle(x: number, y: number, size: number, active: boolean): void {
+  renderConsumableToggle(x: number, y: number, size: number, active: boolean, ready: boolean): void {
     // Background
     this.ctx.fillStyle = active ? '#6366F1' : '#7C3AED';
     this.roundRect(x, y, size, size, 6);
@@ -1540,6 +1610,21 @@ export class Renderer {
     // Cork
     this.ctx.fillStyle = active ? '#C4B5FD' : '#DDD6FE';
     this.ctx.fillRect(cx - 5, cy - 15, 10, 5);
+
+    // Ready indicator dot
+    if (ready && !active) {
+      const dotR = 6;
+      const dotX = x + size - 4;
+      const dotY = y + 4;
+      this.ctx.beginPath();
+      this.ctx.arc(dotX, dotY, dotR + 2, 0, Math.PI * 2);
+      this.ctx.fillStyle = 'rgba(74, 222, 128, 0.4)';
+      this.ctx.fill();
+      this.ctx.beginPath();
+      this.ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+      this.ctx.fillStyle = '#4ADE80';
+      this.ctx.fill();
+    }
   }
 
   private darkenColor(hex: string, amount: number): string {
