@@ -19,30 +19,24 @@ export const GameStats = ({ gameState, waveInfo, compact = false }: GameStatsPro
   };
 
   if (compact) {
+    const maxLives = 20;
     return (
-      <div className="bg-white/90 rounded-lg p-2 shadow-lg">
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <div className="flex items-center gap-1">
-            <span className="text-gray-700 font-semibold">Lives:</span>
-            <div className="flex gap-0.5">
-              {Array.from({ length: gameState.lives }).map((_, i) => (
-                <div key={i} className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-xs">
-                  ❤️
-                </div>
-              ))}
-            </div>
+      <div className="bg-white/90 rounded-lg p-1.5 shadow-lg">
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <div className="grid grid-cols-10 gap-px leading-none">
+            {Array.from({ length: maxLives }).map((_, i) => (
+              <span key={i} className={`text-[10px] ${i < gameState.lives ? 'opacity-100' : 'opacity-20'}`}>
+                ❤️
+              </span>
+            ))}
           </div>
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5 flex-shrink-0">
             <CoinIcon size={16} />
             <span className="text-lg font-bold text-green-600">{gameState.money}</span>
           </div>
-          <div>
-            <span className="text-gray-700 font-semibold">Wave:</span>
-            <span className="font-bold text-blue-600"> {waveInfo.current}/{waveInfo.total}</span>
-          </div>
-          <div>
-            <span className="text-gray-700 font-semibold">Score:</span>
-            <span className="font-bold text-purple-600"> {gameState.score}</span>
+          <div className="flex-shrink-0">
+            <span className="text-gray-700 font-semibold">W:</span>
+            <span className="font-bold text-blue-600">{waveInfo.current}/{waveInfo.total}</span>
           </div>
         </div>
       </div>
@@ -53,16 +47,13 @@ export const GameStats = ({ gameState, waveInfo, compact = false }: GameStatsPro
     <div className="bg-white/90 rounded-lg p-4 shadow-lg">
       <h2 className="text-2xl font-bold text-gray-800 mb-4">Game Stats</h2>
       <div className="space-y-3">
-        <div className="flex justify-between items-center">
+        <div>
           <span className="text-gray-700 font-semibold">Lives:</span>
-          <div className="flex gap-1">
-            {Array.from({ length: gameState.lives }).map((_, i) => (
-              <div
-                key={i}
-                className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center"
-              >
-                <span className="text-white text-lg">❤️</span>
-              </div>
+          <div className="grid grid-cols-10 gap-1 mt-1">
+            {Array.from({ length: 20 }).map((_, i) => (
+              <span key={i} className={`text-sm text-center ${i < gameState.lives ? 'opacity-100' : 'opacity-20'}`}>
+                ❤️
+              </span>
             ))}
           </div>
         </div>

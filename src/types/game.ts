@@ -152,11 +152,12 @@ export interface GameState {
   isPaused: boolean;
   isGameOver: boolean;
   isVictory: boolean;
-  currentLevel: number;      
+  currentLevel: number;
   selectedFrogType: FrogType | null;
   selectedGridCell: GridPosition | null;
   selectedFrog: string | null;
   gameSpeed: number;
+  showConsumables: boolean;
 }
 
 export interface LevelData {
@@ -208,4 +209,24 @@ export interface GameProgress {
   levels: Map<number, LevelProgress>;
   currentLevel: number;
   highestUnlockedLevel: number;
+}
+
+export interface RiverDefinition {
+  id: string;
+  name: string;
+  levelCount: number;
+  unlockRequirement: { riverId: string; stars: number } | null;
+  color: string;
+  levelSetSource: 'json' | 'procedural';
+}
+
+export enum ConsumableType {
+  RAIN = 'RAIN',
+  HEAL = 'HEAL',
+  WHIRLPOOL = 'WHIRLPOOL',
+}
+
+export interface ConsumableInventory {
+  count: number;
+  cooldownUntil: number; // timestamp, 0 = ready
 }

@@ -1,14 +1,16 @@
 ﻿import { useEffect, useRef } from 'react';
-import { LevelProgress } from '../../types/game';
+import { LevelProgress, RiverDefinition } from '../../types/game';
 
 interface LevelMapProps {
   progress: LevelProgress[];
+  river: RiverDefinition;
   onSelectLevel: (levelNumber: number) => void;
-  onUnlockAll?: () => void;  // ADD THIS
+  onUnlockAll?: () => void;
   onOpenSettings?: () => void;
+  onBack?: () => void;
 }
 
-export function LevelMap({ progress, onSelectLevel, onUnlockAll, onOpenSettings }: LevelMapProps) {
+export function LevelMap({ progress, river, onSelectLevel, onUnlockAll, onOpenSettings, onBack }: LevelMapProps) {
   // --- CONFIGURATION ---
   // We use a fixed logical width for calculations. 
   // The CSS will scale this to fit the phone screen automatically.
@@ -91,6 +93,18 @@ export function LevelMap({ progress, onSelectLevel, onUnlockAll, onOpenSettings 
     // OUTER WRAPPER: Full screen background
     <div className="w-full h-screen bg-gradient-to-b from-teal-200 to-blue-400 overflow-hidden relative">
 
+      {/* Back button */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="absolute top-4 left-4 z-30 w-10 h-10 bg-white/80 hover:bg-white rounded-full shadow-lg flex items-center justify-center transition-colors"
+        >
+          <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+      )}
+
       {/* Settings gear icon */}
       {onOpenSettings && (
         <button
@@ -126,7 +140,7 @@ export function LevelMap({ progress, onSelectLevel, onUnlockAll, onOpenSettings 
           {/* 1. TITLE (Floating in the game world) */}
           <div className="absolute top-20 left-0 w-full text-center z-20 pointer-events-none">
             <h1 className="text-4xl font-black text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] tracking-wider">
-              RIO RIBBIT
+              {river.name.toUpperCase()}
             </h1>
           </div>
 
@@ -242,22 +256,6 @@ export function LevelMap({ progress, onSelectLevel, onUnlockAll, onOpenSettings 
               START
             </div>
           </div>
-
-          {/* Dev Unlock All Button */}
-          {onUnlockAll && (
-            <div
-              className="absolute w-full text-center z-20"
-              style={{ top: `${MAP_HEIGHT - 40}px` }}
-            >
-              <button
-                onClick={onUnlockAll}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs
-                           font-bold rounded shadow-lg transition-colors"
-              >
-                DEV: Unlock All
-              </button>
-            </div>
-          )}
 
         </div>
       </div>

@@ -9,6 +9,7 @@ interface GameCanvasProps {
   onGameStateChange?: (state: GameState) => void;
   onWaveInfoChange?: (waveInfo: { current: number; total: number; timeUntilNext: number }) => void;
   onLevelComplete?: () => void;
+  onBackToMap?: () => void;
   handedness?: 'left' | 'right';
 }
 
@@ -17,6 +18,11 @@ export interface GameCanvasHandle {
   updateDragHighlight: (screenX: number, screenY: number, frogType?: FrogType) => void;
   clearDragHighlight: () => void;
   getCanvasRect: () => DOMRect | null;
+  applyRain: () => void;
+  applyHeal: () => void;
+  placeWhirlpoolAtScreenPos: (screenX: number, screenY: number) => void;
+  updateWhirlpoolHighlight: (screenX: number, screenY: number) => void;
+  clearWhirlpoolHighlight: () => void;
 }
 
 export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
@@ -25,6 +31,7 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
   onGameStateChange,
   onWaveInfoChange,
   onLevelComplete,
+  onBackToMap,
   handedness = 'right'
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -49,6 +56,18 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
     return { row, col };
   };
 
+  const screenToCanvasPixel = (screenX: number, screenY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (screenX - rect.left) * scaleX,
+      y: (screenY - rect.top) * scaleY,
+    };
+  };
+
   useImperativeHandle(ref, () => ({
     placeFrogAtScreenPos(screenX: number, screenY: number, frogType: FrogType): boolean {
       const engine = gameEngineRef.current;
@@ -71,7 +90,28 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
     },
     getCanvasRect(): DOMRect | null {
       return canvasRef.current?.getBoundingClientRect() ?? null;
-    }
+    },
+    applyRain(): void {
+      gameEngineRef.current?.applyRain();
+    },
+    applyHeal(): void {
+      gameEngineRef.current?.applyHeal();
+    },
+    placeWhirlpoolAtScreenPos(screenX: number, screenY: number): void {
+      const engine = gameEngineRef.current;
+      if (!engine) return;
+      const pos = screenToCanvasPixel(screenX, screenY);
+      if (pos) engine.placeWhirlpool(pos.x, pos.y);
+    },
+    updateWhirlpoolHighlight(screenX: number, screenY: number): void {
+      const engine = gameEngineRef.current;
+      if (!engine) return;
+      const pos = screenToCanvasPixel(screenX, screenY);
+      engine.setWhirlpoolHighlight(pos);
+    },
+    clearWhirlpoolHighlight(): void {
+      gameEngineRef.current?.setWhirlpoolHighlight(null);
+    },
   }));
 
   // Initialize once
@@ -84,6 +124,9 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
     gameEngineRef.current = gameEngine;
     gameEngine.onVictoryContinue = () => {
       if (onLevelComplete) onLevelComplete();
+    };
+    gameEngine.onBackToMap = () => {
+      if (onBackToMap) onBackToMap();
     };
     gameEngine.loadLevel(level);
     gameEngine.start();

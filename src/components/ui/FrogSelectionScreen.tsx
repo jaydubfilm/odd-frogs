@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { FrogType, FoodType, LevelData, CellType } from '../../types/game';
-import { FROG_STATS, FROG_UNLOCK_LEVEL, GAME_CONFIG, COLORS } from '@data/constants';
+import { FROG_STATS, GAME_CONFIG, COLORS } from '@data/constants';
 import { FrogPreview } from './FrogPreview';
+import { CoinIcon } from './CoinIcon';
 
 interface FrogSelectionScreenProps {
   level: LevelData;
@@ -15,6 +16,14 @@ interface FrogSelectionScreenProps {
 const ALL_FROGS = [FrogType.GREEN, FrogType.BLUE, FrogType.RED, FrogType.YELLOW, FrogType.PURPLE];
 
 const DRAG_THRESHOLD = 8;
+
+const FROG_NAMES: Record<FrogType, string> = {
+  [FrogType.GREEN]: 'Green',
+  [FrogType.BLUE]: 'Blue',
+  [FrogType.RED]: 'Red',
+  [FrogType.YELLOW]: 'Yellow',
+  [FrogType.PURPLE]: 'Purple',
+};
 
 export function FrogSelectionScreen({
   level,
@@ -32,6 +41,9 @@ export function FrogSelectionScreen({
     }
     return Array(purchaseSlots).fill(null);
   });
+
+  // Inspected frog (selected in roster to view stats)
+  const [inspectedFrog, setInspectedFrog] = useState<FrogType | null>(null);
 
   // Drag state
   const [dragFrog, setDragFrog] = useState<FrogType | null>(null);
@@ -83,14 +95,8 @@ export function FrogSelectionScreen({
           return updated;
         });
       } else {
-        // Tap on roster frog -> add to next empty slot
-        setSelectedFrogs(prev => {
-          const emptyIndex = prev.indexOf(null);
-          if (emptyIndex === -1) return prev;
-          const updated = [...prev];
-          updated[emptyIndex] = start.frog;
-          return updated;
-        });
+        // Tap on roster frog -> select/deselect for inspection
+        setInspectedFrog(prev => prev === start.frog ? null : start.frog);
       }
       return;
     }
@@ -121,23 +127,10 @@ export function FrogSelectionScreen({
       if (targetSlot >= 0) {
         const existing = updated[targetSlot];
         if (existing && dragSourceSlot !== null) {
-          // Swap: put the displaced frog back into the source slot
           updated[dragSourceSlot] = existing;
-        } else if (existing) {
-          // Dragging from roster onto an occupied slot - put existing back, place new
-          // Don't place since slot is occupied by a different frog
-          // Actually let's swap: remove existing, place dragged
-          updated[targetSlot] = dragFrog;
-          // existing goes back to roster (just clear the slot, it returns automatically)
         }
-        if (!existing || dragSourceSlot !== null) {
-          updated[targetSlot] = dragFrog;
-        } else {
-          updated[targetSlot] = dragFrog;
-        }
+        updated[targetSlot] = dragFrog;
       }
-      // If dropped outside all slots (targetSlot === -1) and came from a slot,
-      // it was already cleared above (effectively removing it).
       return updated;
     });
 
@@ -153,11 +146,23 @@ export function FrogSelectionScreen({
     setDragSourceSlot(null);
   }, []);
 
+  // Tap on a slot: place inspected frog if empty, or remove if filled
+  const handleSlotTap = useCallback((index: number) => {
+    if (selectedFrogs[index] !== null) return; // filled slots handled by pointerDown/Up
+    if (!inspectedFrog) return;
+    if (selectedFrogs.includes(inspectedFrog)) return; // already placed
+
+    setSelectedFrogs(prev => {
+      const updated = [...prev];
+      updated[index] = inspectedFrog;
+      return updated;
+    });
+    setInspectedFrog(null);
+  }, [inspectedFrog, selectedFrogs]);
+
   const filledCount = selectedFrogs.filter(f => f !== null).length;
   const canStart = filledCount >= 1;
 
-  const isInSlot = (frogType: FrogType) => selectedFrogs.includes(frogType);
-  // While dragging from a slot, that frog is visually "lifted" so treat its slot as empty
   const isVisuallyInSlot = (frogType: FrogType) => {
     if (dragFrog === frogType && dragSourceSlot !== null) return false;
     return selectedFrogs.includes(frogType);
@@ -196,18 +201,22 @@ export function FrogSelectionScreen({
         <div className="w-16" />
       </div>
 
-      {/* Level Preview + Enemy List */}
+      {/* Level Preview + Side Panel */}
       <div className="flex-1 flex justify-center items-center px-4 min-h-0 gap-3">
-        {/* Enemy summary - vertical column */}
-        {enemyCounts.size > 0 && (
-          <div className="flex flex-col gap-1.5">
-            {Array.from(enemyCounts.entries()).map(([type, count]) => (
-              <div key={type} className="flex items-center gap-1 bg-white/30 rounded-full px-2 py-0.5">
-                <FoodIcon type={type} />
-                <span className="text-xs font-bold text-white drop-shadow">x{count}</span>
-              </div>
-            ))}
-          </div>
+        {/* Left panel: stats overlay or enemy list */}
+        {inspectedFrog ? (
+          <FrogStatsPanel frogType={inspectedFrog} />
+        ) : (
+          enemyCounts.size > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {Array.from(enemyCounts.entries()).map(([type, count]) => (
+                <div key={type} className="flex items-center gap-1 bg-white/30 rounded-full px-2 py-0.5">
+                  <FoodIcon type={type} />
+                  <span className="text-xs font-bold text-white drop-shadow">x{count}</span>
+                </div>
+              ))}
+            </div>
+          )
         )}
         <LevelPreviewSVG level={level} />
       </div>
@@ -221,8 +230,8 @@ export function FrogSelectionScreen({
             {ALL_FROGS.map(frogType => {
               const unlocked = unlockedFrogTypes.includes(frogType);
               const inSlot = isVisuallyInSlot(frogType);
-              const unlockLevel = FROG_UNLOCK_LEVEL[frogType];
               const isBeingDragged = dragFrog === frogType && dragSourceSlot === null;
+              const isInspected = inspectedFrog === frogType;
 
               return (
                 <button
@@ -230,12 +239,14 @@ export function FrogSelectionScreen({
                   disabled={!unlocked || inSlot}
                   onPointerDown={(e) => handleRosterPointerDown(e, frogType)}
                   className={`
-                    w-14 h-14 rounded-xl border-2 flex items-center justify-center relative touch-none select-none
-                    ${unlocked && !inSlot && !isBeingDragged
-                      ? 'bg-white border-gray-300 cursor-pointer hover:border-yellow-400 active:scale-95'
-                      : unlocked && (inSlot || isBeingDragged)
-                        ? 'bg-gray-100 border-gray-200 opacity-40 cursor-not-allowed'
-                        : 'bg-gray-400 border-gray-500 cursor-not-allowed'
+                    w-14 h-14 rounded-full border-2 flex items-center justify-center relative touch-none select-none
+                    ${isInspected
+                      ? 'bg-yellow-50 border-yellow-400 ring-2 ring-yellow-300 cursor-pointer'
+                      : unlocked && !inSlot && !isBeingDragged
+                        ? 'bg-white border-gray-300 cursor-pointer hover:border-yellow-400 active:scale-95'
+                        : unlocked && (inSlot || isBeingDragged)
+                          ? 'bg-gray-100 border-gray-200 opacity-40 cursor-not-allowed'
+                          : 'bg-gray-400 border-gray-500 cursor-not-allowed'
                     }
                     transition-all
                   `}
@@ -247,12 +258,9 @@ export function FrogSelectionScreen({
                       <FrogPreview frogType={frogType} size={36} />
                     )
                   ) : (
-                    <div className="flex flex-col items-center">
-                      <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                      <span className="text-[10px] font-bold text-gray-600">Lv {unlockLevel}</span>
-                    </div>
+                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
                   )}
                 </button>
               );
@@ -269,18 +277,22 @@ export function FrogSelectionScreen({
             {selectedFrogs.map((frog, index) => {
               const isLiftedFromHere = dragSourceSlot === index;
               const displayFrog = isLiftedFromHere ? null : frog;
+              const canPlace = !displayFrog && inspectedFrog && !selectedFrogs.includes(inspectedFrog);
 
               return (
                 <button
                   key={index}
                   ref={el => { slotRefs.current[index] = el; }}
-                  onPointerDown={(e) => handleSlotPointerDown(e, index)}
+                  onPointerDown={displayFrog ? (e) => handleSlotPointerDown(e, index) : undefined}
+                  onClick={!displayFrog ? () => handleSlotTap(index) : undefined}
                   className={`
-                    w-14 h-14 rounded-full border-2 flex items-center justify-center touch-none select-none
+                    w-14 h-14 rounded-xl border-2 flex items-center justify-center touch-none select-none
                     transition-all
                     ${displayFrog
-                      ? 'bg-white border-yellow-400 cursor-pointer hover:border-red-400 active:scale-95'
-                      : 'bg-white/20 border-dashed border-white/60 cursor-default'
+                      ? 'bg-white border-yellow-400 cursor-pointer active:scale-95'
+                      : canPlace
+                        ? 'bg-yellow-100/40 border-yellow-400 border-dashed cursor-pointer'
+                        : 'bg-white/20 border-dashed border-white/60 cursor-default'
                     }
                   `}
                 >
@@ -331,6 +343,52 @@ export function FrogSelectionScreen({
   );
 }
 
+function FrogStatsPanel({ frogType }: { frogType: FrogType }) {
+  const stats = FROG_STATS[frogType];
+  const name = FROG_NAMES[frogType];
+
+  const lines: { label: string; value: string }[] = [
+    { label: 'DMG', value: stats.damage === 0 ? '--' : `${stats.damage}` },
+    { label: 'SPD', value: `${stats.attackSpeed}/s` },
+    { label: 'RNG', value: stats.range >= 999 ? 'Inf' : `${stats.range}` },
+  ];
+  if (stats.minRange) lines.push({ label: 'MIN', value: `${stats.minRange}` });
+  if (stats.aoeRadius) lines.push({ label: 'AOE', value: `${stats.aoeRadius}` });
+  if (stats.slowAmount) lines.push({ label: 'SLOW', value: `${Math.round(stats.slowAmount * 100)}%` });
+
+  const traits: string[] = [];
+  if (stats.ignoresRocks) traits.push('Over rocks');
+  if (stats.blockedByFrogs) traits.push('Blocked by frogs');
+
+  return (
+    <div className="bg-white/40 rounded-xl px-3 py-3 min-w-[100px]">
+      <div className="flex flex-col items-center mb-2">
+        <FrogPreview frogType={frogType} size={48} />
+        <span className="text-base font-bold text-gray-800 -mt-1">{name}</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {lines.map(l => (
+          <div key={l.label} className="flex justify-between gap-3">
+            <span className="text-xs font-bold text-gray-500">{l.label}</span>
+            <span className="text-xs font-bold text-gray-800">{l.value}</span>
+          </div>
+        ))}
+      </div>
+      {traits.length > 0 && (
+        <div className="mt-1.5 pt-1.5 border-t border-white/40">
+          {traits.map(t => (
+            <p key={t} className="text-[10px] text-gray-600 italic">{t}</p>
+          ))}
+        </div>
+      )}
+      <div className="mt-1.5 pt-1.5 border-t border-white/40 flex items-center justify-center gap-1">
+        <CoinIcon size={16} />
+        <span className="text-sm font-bold text-yellow-700">{stats.cost}</span>
+      </div>
+    </div>
+  );
+}
+
 /** SVG-based miniature level preview showing grid cells and stream paths */
 function LevelPreviewSVG({ level }: { level: LevelData }) {
   const { cellSize, gridRows, gridCols } = GAME_CONFIG;
@@ -339,8 +397,8 @@ function LevelPreviewSVG({ level }: { level: LevelData }) {
   const fullWidth = GAME_CONFIG.canvasWidth;
   const fullHeight = GAME_CONFIG.canvasHeight;
 
-  // Scale to fit ~300px wide
-  const scale = 300 / fullWidth;
+  // Scale to fit ~240px wide
+  const scale = 240 / fullWidth;
   const displayWidth = fullWidth * scale;
   const displayHeight = fullHeight * scale;
 
@@ -410,8 +468,18 @@ function LevelPreviewSVG({ level }: { level: LevelData }) {
                   <circle cx={cell.x} cy={cell.y} r={r * 0.4} fill={COLORS.LILY} />
                 </g>
               );
-            case CellType.ROCK:
-              return <circle key={i} cx={cell.x} cy={cell.y} r={r} fill={COLORS.ROCK} stroke="#666" strokeWidth={2} />;
+            case CellType.ROCK: {
+              const s = r;
+              const pts = [
+                `${cell.x - s},${cell.y}`,
+                `${cell.x - s / 2},${cell.y - s}`,
+                `${cell.x + s / 2},${cell.y - s * 0.66}`,
+                `${cell.x + s},${cell.y}`,
+                `${cell.x + s * 0.66},${cell.y + s}`,
+                `${cell.x - s * 0.66},${cell.y + s}`,
+              ].join(' ');
+              return <polygon key={i} points={pts} fill={COLORS.ROCK} stroke="#606060" strokeWidth={2} />;
+            }
             default:
               return null;
           }

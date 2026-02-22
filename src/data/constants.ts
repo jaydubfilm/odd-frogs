@@ -1,5 +1,4 @@
 import { FrogType, FrogStats, FoodType, FoodStats, GameConfig } from '../types/game';
-import { UpgradePath } from '../types/upgrades';
 
 export const FROG_UNLOCK_LEVEL: Record<FrogType, number> = {
   [FrogType.GREEN]: 1,
@@ -22,7 +21,7 @@ export const GAME_CONFIG: GameConfig = {
   cellSize: 120,
   canvasWidth: 600,    // 5 * 120 (for channels 0-4)
   canvasHeight: 660,
-  startingLives: 3,
+  startingLives: 20,
   lilyRemovalCost: 10,
 };
 
@@ -35,36 +34,36 @@ export const FROG_STATS: Record<FrogType, FrogStats> = {
     color: '#3498DB',
   },
   [FrogType.RED]: {
-    damage: 15,
+    damage: 12,
     attackSpeed: 0.75,
     range: 4,
     minRange: 2,
     ignoresRocks: true,
     aoeRadius: 1,
-    cost: 12,
+    cost: 10,
     color: '#E74C3C',
   },
   [FrogType.YELLOW]: {
     damage: 0,
     attackSpeed: 1,
     range: 1.25,
-    slowAmount: 0.5,
-    cost: 14,
+    slowAmount: 0.35,
+    cost: 10,
     color: '#F39C12',
   },
   [FrogType.GREEN]: {
-    damage: 25,
+    damage: 16,
     attackSpeed: 0.75,
     range: 1.5,
-    cost: 16,
+    cost: 10,
     color: '#2ECC71',
   },
   [FrogType.PURPLE]: {
-    damage: 80,
+    damage: 40,
     attackSpeed: 0.33,
     range: 999,
-    blockedByFrogs: true,
-    cost: 20,
+    blockedByFrogs: false,
+    cost: 10,
     color: '#9B59B6',
   },
 };
@@ -92,25 +91,40 @@ export const COLORS = {
   HEALTH_BAR_DAMAGED: '#FF0000',
 };
 
-export const UPGRADE_PATH_COSTS = [5, 10, 15]; // Cost for levels 1, 2, 3
+export const UPGRADE_PATH_COSTS = [15, 35, 75]; // L1, L2, L3
 
-export const UPGRADE_PATH_BUFFS: Record<UpgradePath, {
-  damageMult?: number[];
-  attackSpeedMult?: number[];
-  damageBonus?: number[];
-  attackSpeedBonus?: number[];
-}> = {
-  [UpgradePath.NONE]: {},
-  [UpgradePath.SPOTS]: {
-    damageMult: [1.4, 1.8, 2.5],
-    attackSpeedMult: [1.2, 1.4, 1.7],
-  },
-  [UpgradePath.HORIZONTAL_STRIPES]: {
-    damageBonus: [3, 6, 10],
-    attackSpeedBonus: [0.3, 0.6, 1.0],
-  },
-  [UpgradePath.VERTICAL_STRIPES]: {
-    damageBonus: [3, 6, 10],
-    attackSpeedBonus: [0.3, 0.6, 1.0],
-  },
+export const CONSUMABLE_CONFIG = {
+  STARTING_COUNT: 2,
+  COOLDOWN_MS: 30000,
+  RAIN_DAMAGE: 10,
+  HEAL_AMOUNT: 5,
+  WHIRLPOOL_RADIUS_GRID: 0.9,
+  WHIRLPOOL_DURATION_S: 10,
+  WHIRLPOOL_DAMAGE: 20,
+  WHIRLPOOL_TICK_INTERVAL: 0.5,
+  RAIN_VISUAL_DURATION: 800,
+};
+
+// Power Factor table -- all damage/speed values are multipliers on base stats.
+// synergyPerNeighbor is bonus damage per neighbor as a multiple of base damage.
+// Any frog with matching path at L2+ counts as a neighbor regardless of its level.
+//
+// Max neighbors:  H-stripes=3 (4 cols)  V-stripes=4 (5 rows)
+//                 L2 circles=4 (cardinal)  L3 circles=8 (cardinal+diagonal)
+//
+// L2 max totals:                          L3 max totals:
+//   Spots:           6x                     Spots:            15x
+//   H-stripe (3):    3 + 3*1.5 =  7.5x     H-stripe (3):     6 + 3*4  = 18x
+//   V-stripe (4):    3 + 4*1.5 =  9x       V-stripe (4):     6 + 4*4  = 22x
+//   Circle  (4):     3 + 4*1.5 =  9x       Circle  (8):      6 + 8*2  = 22x
+export const POWER_FACTORS: Record<string, { damage: number; speed: number; synergyPerNeighbor?: number }> = {
+  L1:            { damage: 2,  speed: 1.4 },
+  L2_SPOTS:      { damage: 6,  speed: 2   },
+  L3_SPOTS:      { damage: 15, speed: 3   },
+  L2_CIRCLES:    { damage: 3,  speed: 1.6, synergyPerNeighbor: 1.5 },
+  L3_CIRCLES:    { damage: 6,  speed: 2,   synergyPerNeighbor: 2   },
+  L2_H_STRIPES:  { damage: 3,  speed: 1.6, synergyPerNeighbor: 1.5 },
+  L3_H_STRIPES:  { damage: 6,  speed: 2,   synergyPerNeighbor: 4   },
+  L2_V_STRIPES:  { damage: 3,  speed: 1.6, synergyPerNeighbor: 1.5 },
+  L3_V_STRIPES:  { damage: 6,  speed: 2,   synergyPerNeighbor: 4   },
 };

@@ -25,8 +25,8 @@ export class FrogSystem {
       targetFood: null,
       totalSpent: 0,
       upgradeState: {
-        path: UpgradePath.NONE,
         level: 0,
+        path: UpgradePath.NONE,
         totalSpent: 0,
       },
     };
@@ -48,7 +48,14 @@ export class FrogSystem {
 
     const minRangePixels = (frog.stats.minRange ?? 0) * GAME_CONFIG.cellSize;
 
+    const currentTime = performance.now() / 1000;
+
     foods.forEach(food => {
+      // Slow frogs skip already-slowed food
+      if (frog.stats.slowAmount && food.slowEffect && food.slowEffect.endTime > currentTime) {
+        return;
+      }
+
       // Check line of sight: blocked by rocks (unless frog ignores rocks) or by other frogs
       if (this.isLineOfSightBlocked(frogPos, food.position, grid, frog.gridPosition, frog)) {
         return;
@@ -230,7 +237,8 @@ export class FrogSystem {
     grid: GridCell[][],
     _deltaTime: number,
     upgradeSystem: UpgradeSystem,
-    aoeEffectSystem?: AoeEffectSystem
+    aoeEffectSystem?: AoeEffectSystem,
+    gameSpeed: number = 1
   ): void {
     const currentTime = performance.now() / 1000;
 
@@ -248,7 +256,7 @@ export class FrogSystem {
         frog.targetFood = target.id;
 
         const timeSinceLastAttack = currentTime - frog.lastAttackTime;
-        const attackInterval = 1 / effective.attackSpeed;
+        const attackInterval = (1 / effective.attackSpeed) / gameSpeed;
 
         if (timeSinceLastAttack >= attackInterval) {
           this.attackFood(frog, target, effective.damage, foods, aoeEffectSystem);

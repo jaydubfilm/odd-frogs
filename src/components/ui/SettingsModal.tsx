@@ -2,9 +2,10 @@ interface SettingsModalProps {
   handedness: 'left' | 'right';
   onHandednessChange: (value: 'left' | 'right') => void;
   onClose: () => void;
+  onUnlockAll?: () => void;
 }
 
-export function SettingsModal({ handedness, onHandednessChange, onClose }: SettingsModalProps) {
+export function SettingsModal({ handedness, onHandednessChange, onClose, onUnlockAll }: SettingsModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -51,6 +52,17 @@ export function SettingsModal({ handedness, onHandednessChange, onClose }: Setti
             </button>
           </div>
         </div>
+
+        {onUnlockAll && (
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <button
+              onClick={onUnlockAll}
+              className="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded transition-colors"
+            >
+              DEV: Unlock All Levels
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

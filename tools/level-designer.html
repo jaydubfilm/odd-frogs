@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Odd Frogs - Level Designer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; }
+header { display: flex; gap: 8px; padding: 8px 12px; background: #16213e; border-bottom: 1px solid #333; align-items: center; }
+header button { padding: 6px 14px; border: 1px solid #555; background: #0f3460; color: #e0e0e0; border-radius: 4px; cursor: pointer; font-size: 13px; }
+header button:hover { background: #1a5276; }
+header .separator { width: 1px; height: 24px; background: #444; margin: 0 4px; }
+.main { display: flex; flex: 1; overflow: hidden; }
+.canvas-wrap { padding: 12px; display: flex; align-items: flex-start; justify-content: center; }
+canvas#canvas { border: 1px solid #444; border-radius: 4px; }
+.sidebar { width: 260px; min-width: 260px; padding: 12px; overflow-y: auto; border-left: 1px solid #333; background: #16213e; display: flex; flex-direction: column; gap: 14px; }
+.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 6px; }
+.tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tool-btn { padding: 8px; border: 2px solid #444; background: #0f3460; color: #e0e0e0; border-radius: 4px; cursor: pointer; font-size: 13px; text-align: center; }
+.tool-btn.active { border-color: #e94560; background: #1a5276; }
+.tool-btn:hover { background: #1a5276; }
+.prop-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.prop-row label { font-size: 13px; min-width: 60px; }
+.prop-row input[type="text"], .prop-row input[type="number"] { flex: 1; padding: 4px 6px; border: 1px solid #555; background: #0a0a1a; color: #e0e0e0; border-radius: 3px; font-size: 13px; }
+.stream-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; margin-bottom: 4px; background: #0a0a1a; border: 1px solid #333; border-radius: 4px; }
+.stream-item .swatch { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+.stream-item span { font-size: 13px; flex: 1; }
+.stream-item button { padding: 2px 8px; border: 1px solid #555; background: #5a0020; color: #e0e0e0; border-radius: 3px; cursor: pointer; font-size: 11px; }
+.stream-item button:hover { background: #8a0030; }
+.stream-hint { font-size: 11px; color: #666; margin-top: 4px; line-height: 1.4; }
+
+/* Thumbnail carousel footer */
+footer { display: flex; align-items: center; padding: 6px 8px; background: #16213e; border-top: 1px solid #333; gap: 6px; }
+footer .carousel-btn { padding: 6px 10px; border: 1px solid #555; background: #0f3460; color: #e0e0e0; border-radius: 4px; cursor: pointer; font-size: 18px; font-weight: bold; line-height: 1; flex-shrink: 0; }
+footer .carousel-btn:hover { background: #1a5276; }
+footer .carousel-btn.danger { background: #5a0020; }
+footer .carousel-btn.danger:hover { background: #8a0030; }
+.thumb-strip { display: flex; gap: 6px; overflow-x: auto; flex: 1; padding: 4px 2px; align-items: center; scrollbar-width: thin; scrollbar-color: #555 #0a0a1a; }
+.thumb-strip::-webkit-scrollbar { height: 6px; }
+.thumb-strip::-webkit-scrollbar-track { background: #0a0a1a; border-radius: 3px; }
+.thumb-strip::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+.thumb-wrap { flex-shrink: 0; cursor: pointer; border: 2px solid #444; border-radius: 4px; overflow: hidden; position: relative; }
+.thumb-wrap:hover { border-color: #888; }
+.thumb-wrap.selected { border-color: #e94560; box-shadow: 0 0 8px rgba(233, 69, 96, 0.5); }
+.thumb-wrap canvas { display: block; }
+.thumb-label { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: #ccc; font-size: 9px; text-align: center; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thumb-wrap.dirty::after { content: ''; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #ffe66d; border: 1px solid #0a0a1a; }
+header button.discard { background: #5a0020; }
+header button.discard:hover { background: #8a0030; }
+
+#fileInput { display: none; }
+.color-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 4px; border: 1px solid #666; }
+#folderName { font-size: 12px; color: #888; margin-left: 4px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <button id="btnOpenFolder">Open Folder</button>
+  <button id="btnLoad">Load JSON</button>
+  <div class="separator"></div>
+  <button id="btnSave">Save</button>
+  <button id="btnSaveAll">Save All</button>
+  <button id="btnDiscard" class="discard">Discard</button>
+  <div class="separator"></div>
+  <button id="btnExport">Export levelSet.json</button>
+  <input type="file" id="fileInput" accept=".json">
+  <span id="folderName"></span>
+</header>
+
+<div class="main">
+  <div class="canvas-wrap">
+    <canvas id="canvas" width="600" height="660"></canvas>
+  </div>
+  <div class="sidebar">
+    <div>
+      <div class="section-title">Tools</div>
+      <div class="tool-grid">
+        <button class="tool-btn active" data-tool="E"><span class="color-swatch" style="background:#87CEEB"></span>Water</button>
+        <button class="tool-btn" data-tool="L"><span class="color-swatch" style="background:#90EE90"></span>Pad</button>
+        <button class="tool-btn" data-tool="W"><span class="color-swatch" style="background:#FFB6C1"></span>Lily</button>
+        <button class="tool-btn" data-tool="R"><span class="color-swatch" style="background:#808080"></span>Rock</button>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Level Properties</div>
+      <div class="prop-row">
+        <label>Name</label>
+        <input type="text" id="propName" value="Level 1">
+      </div>
+      <div class="prop-row">
+        <label>Money</label>
+        <input type="number" id="propMoney" value="20" min="0">
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Streams</div>
+      <div id="streamsContainer"></div>
+      <div class="stream-hint">Click [+] at top of canvas to add streams. Drag stream segments left/right to shape them.</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <button class="carousel-btn" id="btnNew" title="New level">+</button>
+  <div class="thumb-strip" id="thumbStrip"></div>
+  <button class="carousel-btn" id="btnDupe" title="Duplicate level">Dupe</button>
+  <button class="carousel-btn danger" id="btnDel" title="Delete level">Del</button>
+</footer>
+
+<script>
+// -- Constants (mirrored from game) --
+const GRID_ROWS = 5;
+const GRID_COLS = 4;
+const CELL_SIZE = 120;
+const CANVAS_W = 600;
+const CANVAS_H = 660;
+const MARGIN = 60;
+const CORNER_RADIUS_SEG = 10;
+const SMOOTHING_PASSES = 7;
+const PATH_CORNER_RADIUS = 20;
+
+const THUMB_W = 90;
+const THUMB_H = 99; // 660/600 * 90
+const THUMB_SCALE = THUMB_W / CANVAS_W;
+
+const COLORS = {
+  WATER_LIGHT: '#87CEEB',
+  WATER_DARK: '#4682B4',
+  STREAM: '#6A9FB5',
+  LILYPAD: '#90EE90',
+  LILY: '#FFB6C1',
+  ROCK: '#808080',
+};
+
+// Stream handle colors (one per stream, max 3)
+const STREAM_HANDLE_COLORS = ['#ff6b6b', '#4ecdc4', '#ffe66d'];
+
+// Interaction constants
+const ADD_BTN_RADIUS = 16;
+const ADD_BTN_Y = 30;
+const HANDLE_RADIUS = 8;
+const HANDLE_RADIUS_HOVER = 11;
+const GRAB_DIST = 30;
+
+// -- State --
+let levels = [];
+let currentIndex = 0;
+let currentTool = 'E';
+let isPainting = false;
+let animTime = 0;
+let dragState = null;   // { streamIdx, row } or null
+let hoverInfo = null;   // { type:'handle'|'addBtn', streamIdx?, row?, channel? } or null
+let dirHandle = null;   // FileSystemDirectoryHandle for the open folder
+let thumbnailCache = []; // array of { canvas, dirty } per level
+let savedSnapshots = []; // deep-cloned level objects representing last-saved state
+
+// -- DOM --
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const propName = document.getElementById('propName');
+const propMoney = document.getElementById('propMoney');
+const streamsContainer = document.getElementById('streamsContainer');
+const thumbStrip = document.getElementById('thumbStrip');
+const folderNameEl = document.getElementById('folderName');
+
+// -- Init --
+function init() {
+  levels = [makeBlankLevel(1)];
+  currentIndex = 0;
+  markAllSaved();
+  syncUI();
+  startAnim();
+}
+
+function makeBlankLevel(num) {
+  const grid = [];
+  for (let r = 0; r < GRID_ROWS; r++) {
+    const row = [];
+    for (let c = 0; c < GRID_COLS; c++) row.push('E');
+    grid.push(row);
+  }
+  return {
+    id: 'level-' + num,
+    name: 'Level ' + num,
+    startingMoney: 20,
+    grid,
+    streams: [[2, 2, 2, 2, 2]],
+  };
+}
+
+function currentLevel() { return levels[currentIndex]; }
+
+function channelX(ch) { return MARGIN + ch * CELL_SIZE; }
+
+function handleY(row) { return MARGIN + row * CELL_SIZE + CELL_SIZE / 2; }
+
+// Returns the actual rendered position of a handle, offsetting vertically
+// when multiple streams share the same channel in a row.
+function getHandlePos(streamIdx, row) {
+  const streams = currentLevel().streams;
+  const ch = streams[streamIdx][row];
+  const hx = channelX(ch);
+  let hy = handleY(row);
+
+  // Find all streams at this channel in this row, and our position among them
+  let count = 0, position = 0;
+  for (let si = 0; si < streams.length; si++) {
+    if (streams[si][row] === ch) {
+      if (si < streamIdx) position++;
+      count++;
+    }
+  }
+  if (count > 1) {
+    const spacing = 22;
+    hy = hy - (count - 1) * spacing / 2 + position * spacing;
+  }
+  return { x: hx, y: hy };
+}
+
+// -- File System Access API: Folder-based I/O --
+const hasDirectoryPicker = typeof window.showDirectoryPicker === 'function';
+
+document.getElementById('btnOpenFolder').addEventListener('click', async () => {
+  if (!hasDirectoryPicker) {
+    alert('Folder access not supported in this browser. Use Chrome or Edge, or use "Load JSON" instead.');
+    return;
+  }
+  // Check if any level has unsaved changes
+  commitProps();
+  const anyDirty = levels.some((_, i) => isLevelDirty(i));
+  if (anyDirty && !confirm('You have unsaved changes. Opening a folder will discard them. Continue?')) return;
+  try {
+    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    await loadFromFolder();
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Failed to open folder: ' + e.message);
+  }
+});
+
+async function loadFromFolder() {
+  if (!dirHandle) return;
+  folderNameEl.textContent = dirHandle.name;
+  const loaded = [];
+  for await (const [name, handle] of dirHandle) {
+    if (handle.kind !== 'file' || !name.endsWith('.json')) continue;
+    try {
+      const file = await handle.getFile();
+      const text = await file.text();
+      const data = JSON.parse(text);
+      // Single level object: { id, name, grid, streams, ... }
+      if (data.id && data.grid) {
+        sortStreams(data);
+        loaded.push(data);
+      }
+    } catch (e) {
+      console.warn('Skipping ' + name + ':', e.message);
+    }
+  }
+  if (loaded.length === 0) {
+    alert('No valid level files found in folder.');
+    return;
+  }
+  loaded.sort((a, b) => {
+    // Sort by id string (level-1, level-2, ...) numerically if possible
+    const na = parseInt(a.id.replace(/\D/g, '')) || 0;
+    const nb = parseInt(b.id.replace(/\D/g, '')) || 0;
+    return na - nb || a.id.localeCompare(b.id);
+  });
+  levels = loaded;
+  currentIndex = 0;
+  thumbnailCache = [];
+  markAllSaved();
+  syncUI();
+}
+
+async function saveToFolder(levelIndex) {
+  if (!dirHandle) {
+    alert('No folder open. Use "Open Folder" first.');
+    return;
+  }
+  const lv = levels[levelIndex];
+  const filename = lv.id + '.json';
+  try {
+    const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(JSON.stringify(lv, null, 2));
+    await writable.close();
+  } catch (e) {
+    alert('Failed to save ' + filename + ': ' + e.message);
+  }
+}
+
+document.getElementById('btnSave').addEventListener('click', async () => {
+  commitProps();
+  if (dirHandle) {
+    await saveToFolder(currentIndex);
+  } else {
+    const blob = new Blob([JSON.stringify(currentLevel(), null, 2)], { type: 'application/json' });
+    downloadBlob(blob, currentLevel().id + '.json');
+  }
+  markSaved(currentIndex);
+  buildThumbnailStrip();
+});
+
+document.getElementById('btnSaveAll').addEventListener('click', async () => {
+  commitProps();
+  if (dirHandle) {
+    for (let i = 0; i < levels.length; i++) await saveToFolder(i);
+  } else {
+    const blob = new Blob([JSON.stringify({ levels }, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, 'levelSet.json');
+  }
+  markAllSaved();
+  buildThumbnailStrip();
+});
+
+// Legacy Load JSON
+document.getElementById('btnLoad').addEventListener('click', () => {
+  commitProps();
+  const anyDirty = levels.some((_, i) => isLevelDirty(i));
+  if (anyDirty && !confirm('You have unsaved changes. Loading a file will discard them. Continue?')) return;
+  document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.levels && Array.isArray(data.levels)) {
+        levels = data.levels;
+        levels.forEach(lv => sortStreams(lv));
+        currentIndex = 0;
+        dirHandle = null;
+        folderNameEl.textContent = '';
+        thumbnailCache = [];
+        markAllSaved();
+        syncUI();
+      } else {
+        alert('Invalid format: expected { levels: [...] }');
+      }
+    } catch (err) {
+      alert('Failed to parse JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// Export combined levelSet.json
+document.getElementById('btnExport').addEventListener('click', () => {
+  commitProps();
+  const blob = new Blob([JSON.stringify({ levels }, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, 'levelSet.json');
+});
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// -- Dirty tracking --
+function snapshotLevel(lv) {
+  return JSON.parse(JSON.stringify(lv));
+}
+
+function isLevelDirty(idx) {
+  if (!savedSnapshots[idx]) return false;
+  return JSON.stringify(levels[idx]) !== JSON.stringify(savedSnapshots[idx]);
+}
+
+function markSaved(idx) {
+  savedSnapshots[idx] = snapshotLevel(levels[idx]);
+}
+
+function markAllSaved() {
+  savedSnapshots = levels.map(lv => snapshotLevel(lv));
+}
+
+// Returns true if it's OK to proceed (user accepted or no changes).
+function guardUnsaved() {
+  commitProps();
+  if (!isLevelDirty(currentIndex)) return true;
+  return confirm('Level "' + currentLevel().name + '" has unsaved changes. Discard them?');
+}
+
+// Discard
+document.getElementById('btnDiscard').addEventListener('click', () => {
+  if (!savedSnapshots[currentIndex]) return;
+  if (!isLevelDirty(currentIndex)) return;
+  if (!confirm('Discard all changes to "' + currentLevel().name + '"?')) return;
+  levels[currentIndex] = snapshotLevel(savedSnapshots[currentIndex]);
+  markThumbDirty(currentIndex);
+  syncUI();
+});
+
+// -- Stream helpers --
+function sortStreams(lv) {
+  lv.streams.sort((a, b) => a[0] - b[0]);
+}
+
+function getChannelConstraints(streamIdx, row) {
+  const streams = currentLevel().streams;
+  let min = (row === 0 || row === GRID_ROWS - 1) ? 1 : 0;
+  let max = (row === 0 || row === GRID_ROWS - 1) ? 3 : 4;
+  if (streamIdx > 0) {
+    min = Math.max(min, streams[streamIdx - 1][row]);
+  }
+  if (streamIdx < streams.length - 1) {
+    max = Math.min(max, streams[streamIdx + 1][row]);
+  }
+  return { min, max };
+}
+
+function addStreamAt(ch) {
+  const streams = currentLevel().streams;
+  if (streams.length >= 3) return;
+  const newStream = [ch, ch, ch, ch, ch];
+  let idx = streams.length;
+  for (let i = 0; i < streams.length; i++) {
+    if (streams[i][0] > ch) { idx = i; break; }
+  }
+  streams.splice(idx, 0, newStream);
+  buildStreamsUI();
+  markThumbDirty(currentIndex);
+}
+
+// -- Canvas position helper --
+function canvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (CANVAS_W / rect.width),
+    y: (e.clientY - rect.top) * (CANVAS_H / rect.height),
+  };
+}
+
+// -- Hit testing --
+function hitTestAddButton(pos) {
+  const streams = currentLevel().streams;
+  if (streams.length >= 3) return -1;
+  for (const ch of [1, 2, 3]) {
+    const bx = channelX(ch), by = ADD_BTN_Y;
+    const dx = pos.x - bx, dy = pos.y - by;
+    if (dx * dx + dy * dy <= ADD_BTN_RADIUS * ADD_BTN_RADIUS) return ch;
+  }
+  return -1;
+}
+
+function hitTestHandle(pos) {
+  const streams = currentLevel().streams;
+  let closest = null;
+  let closestDist = GRAB_DIST;
+  for (let si = 0; si < streams.length; si++) {
+    for (let r = 0; r < GRID_ROWS; r++) {
+      const hp = getHandlePos(si, r);
+      const dx = pos.x - hp.x, dy = pos.y - hp.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = { streamIdx: si, row: r };
+      }
+    }
+  }
+  return closest;
+}
+
+// -- Canvas interaction --
+let isErasing = false;
+
+canvas.addEventListener('mousedown', (e) => {
+  const pos = canvasPos(e);
+
+  if (e.button === 2) {
+    isErasing = true;
+    eraseAtPos(pos);
+    return;
+  }
+
+  const addCh = hitTestAddButton(pos);
+  if (addCh !== -1) {
+    addStreamAt(addCh);
+    return;
+  }
+
+  const handle = hitTestHandle(pos);
+  if (handle) {
+    dragState = handle;
+    canvas.style.cursor = 'grabbing';
+    window.addEventListener('mousemove', onDragMove);
+    window.addEventListener('mouseup', onDragEnd);
+    return;
+  }
+
+  isPainting = true;
+  paintAtPos(pos);
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (dragState || isPainting) return;
+  const pos = canvasPos(e);
+  updateHover(pos);
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (isPainting || isErasing) markThumbDirty(currentIndex);
+  isPainting = false;
+  isErasing = false;
+});
+
+canvas.addEventListener('mouseleave', () => {
+  if (!dragState) {
+    if (isPainting || isErasing) markThumbDirty(currentIndex);
+    isPainting = false;
+    isErasing = false;
+    hoverInfo = null;
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (isPainting) paintAtPos(canvasPos(e));
+  if (isErasing) eraseAtPos(canvasPos(e));
+});
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function onDragMove(e) {
+  if (!dragState) return;
+  const pos = canvasPos(e);
+  const { streamIdx, row } = dragState;
+  const { min, max } = getChannelConstraints(streamIdx, row);
+  if (min > max) return;
+
+  let ch = Math.round((pos.x - MARGIN) / CELL_SIZE);
+  ch = Math.max(min, Math.min(max, ch));
+  currentLevel().streams[streamIdx][row] = ch;
+}
+
+function onDragEnd() {
+  dragState = null;
+  canvas.style.cursor = 'crosshair';
+  window.removeEventListener('mousemove', onDragMove);
+  window.removeEventListener('mouseup', onDragEnd);
+  buildStreamsUI();
+  markThumbDirty(currentIndex);
+}
+
+function updateHover(pos) {
+  const addCh = hitTestAddButton(pos);
+  if (addCh !== -1) {
+    hoverInfo = { type: 'addBtn', channel: addCh };
+    canvas.style.cursor = 'pointer';
+    return;
+  }
+  const handle = hitTestHandle(pos);
+  if (handle) {
+    hoverInfo = { type: 'handle', streamIdx: handle.streamIdx, row: handle.row };
+    canvas.style.cursor = 'grab';
+    return;
+  }
+  hoverInfo = null;
+  canvas.style.cursor = 'crosshair';
+}
+
+function paintAtPos(pos) {
+  const col = Math.floor((pos.x - MARGIN) / CELL_SIZE);
+  const row = Math.floor((pos.y - MARGIN) / CELL_SIZE);
+  if (row < 0 || row >= GRID_ROWS || col < 0 || col >= GRID_COLS) return;
+  currentLevel().grid[row][col] = currentTool;
+}
+
+function eraseAtPos(pos) {
+  const col = Math.floor((pos.x - MARGIN) / CELL_SIZE);
+  const row = Math.floor((pos.y - MARGIN) / CELL_SIZE);
+  if (row < 0 || row >= GRID_ROWS || col < 0 || col >= GRID_COLS) return;
+  currentLevel().grid[row][col] = 'E';
+}
+
+// -- Thumbnail Carousel --
+function markThumbDirty(idx) {
+  if (thumbnailCache[idx]) thumbnailCache[idx].dirty = true;
+}
+
+function renderThumbnail(levelData) {
+  const tc = document.createElement('canvas');
+  tc.width = THUMB_W;
+  tc.height = THUMB_H;
+  const tctx = tc.getContext('2d');
+  tctx.save();
+  tctx.scale(THUMB_SCALE, THUMB_SCALE);
+
+  // Background gradient
+  const grad = tctx.createLinearGradient(0, 0, 0, CANVAS_H);
+  grad.addColorStop(0, COLORS.WATER_LIGHT);
+  grad.addColorStop(1, COLORS.WATER_DARK);
+  tctx.fillStyle = grad;
+  tctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // Streams
+  if (levelData.streams) {
+    levelData.streams.forEach(channels => {
+      const elements = channelsToSegments(channels);
+      const segs = extractLineSegments(elements);
+      const points = generateSmoothPath(segs);
+      if (points.length < 2) return;
+
+      const tracePath = () => {
+        tctx.beginPath();
+        tctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) tctx.lineTo(points[i].x, points[i].y);
+      };
+
+      tctx.save();
+      tctx.lineCap = 'round';
+      tctx.lineJoin = 'round';
+      tctx.globalAlpha = 0.5;
+      tctx.strokeStyle = COLORS.STREAM;
+      tctx.lineWidth = 18;
+      tracePath(); tctx.stroke();
+      tctx.restore();
+    });
+  }
+
+  // Grid cells
+  for (let r = 0; r < GRID_ROWS; r++) {
+    for (let c = 0; c < GRID_COLS; c++) {
+      const cx = MARGIN + c * CELL_SIZE + CELL_SIZE / 2;
+      const cy = MARGIN + r * CELL_SIZE + CELL_SIZE / 2;
+      const code = levelData.grid[r][c];
+      const size = CELL_SIZE * 0.5;
+      if (code === 'L' || code === 'W') {
+        tctx.fillStyle = COLORS.LILYPAD;
+        tctx.beginPath();
+        tctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+        tctx.fill();
+      }
+      if (code === 'W') {
+        tctx.fillStyle = COLORS.LILY;
+        tctx.beginPath();
+        tctx.arc(cx, cy, size * 0.15, 0, Math.PI * 2);
+        tctx.fill();
+      }
+      if (code === 'R') {
+        tctx.fillStyle = COLORS.ROCK;
+        tctx.beginPath();
+        tctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+        tctx.fill();
+      }
+    }
+  }
+
+  // Grid lines
+  tctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  tctx.lineWidth = 1;
+  for (let r = 0; r <= GRID_ROWS; r++) {
+    tctx.beginPath();
+    tctx.moveTo(MARGIN, MARGIN + r * CELL_SIZE);
+    tctx.lineTo(MARGIN + GRID_COLS * CELL_SIZE, MARGIN + r * CELL_SIZE);
+    tctx.stroke();
+  }
+  for (let c = 0; c <= GRID_COLS; c++) {
+    tctx.beginPath();
+    tctx.moveTo(MARGIN + c * CELL_SIZE, MARGIN);
+    tctx.lineTo(MARGIN + c * CELL_SIZE, MARGIN + GRID_ROWS * CELL_SIZE);
+    tctx.stroke();
+  }
+
+  tctx.restore();
+  return tc;
+}
+
+function buildThumbnailStrip() {
+  thumbStrip.innerHTML = '';
+  // Ensure cache array matches levels length
+  while (thumbnailCache.length < levels.length) thumbnailCache.push(null);
+  thumbnailCache.length = levels.length;
+
+  for (let i = 0; i < levels.length; i++) {
+    // Render or re-render if dirty/missing
+    if (!thumbnailCache[i] || thumbnailCache[i].dirty) {
+      thumbnailCache[i] = { canvas: renderThumbnail(levels[i]), dirty: false };
+    }
+
+    const wrap = document.createElement('div');
+    let cls = 'thumb-wrap';
+    if (i === currentIndex) cls += ' selected';
+    if (isLevelDirty(i)) cls += ' dirty';
+    wrap.className = cls;
+    wrap.appendChild(thumbnailCache[i].canvas);
+
+    const label = document.createElement('div');
+    label.className = 'thumb-label';
+    label.textContent = (i + 1) + '. ' + levels[i].name;
+    wrap.appendChild(label);
+
+    wrap.addEventListener('click', () => {
+      if (i === currentIndex) return;
+      if (!guardUnsaved()) return;
+      currentIndex = i;
+      syncUI();
+    });
+
+    thumbStrip.appendChild(wrap);
+  }
+
+  // Scroll selected thumbnail into view
+  const selected = thumbStrip.querySelector('.thumb-wrap.selected');
+  if (selected) {
+    selected.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  }
+}
+
+// -- Carousel actions --
+document.getElementById('btnNew').addEventListener('click', () => {
+  if (!guardUnsaved()) return;
+  const num = levels.length + 1;
+  const lv = makeBlankLevel(num);
+  levels.push(lv);
+  savedSnapshots.push(snapshotLevel(lv));
+  currentIndex = levels.length - 1;
+  thumbnailCache.push(null);
+  syncUI();
+});
+document.getElementById('btnDupe').addEventListener('click', () => {
+  commitProps();
+  const copy = JSON.parse(JSON.stringify(currentLevel()));
+  copy.id = 'level-' + (levels.length + 1);
+  copy.name = copy.name + ' (copy)';
+  levels.splice(currentIndex + 1, 0, copy);
+  savedSnapshots.splice(currentIndex + 1, 0, snapshotLevel(copy));
+  thumbnailCache.splice(currentIndex + 1, 0, null);
+  currentIndex++;
+  syncUI();
+});
+document.getElementById('btnDel').addEventListener('click', () => {
+  if (levels.length <= 1) { alert('Cannot delete the only level.'); return; }
+  levels.splice(currentIndex, 1);
+  savedSnapshots.splice(currentIndex, 1);
+  thumbnailCache.splice(currentIndex, 1);
+  if (currentIndex >= levels.length) currentIndex = levels.length - 1;
+  syncUI();
+});
+
+// -- Tools --
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTool = btn.dataset.tool;
+  });
+});
+
+// -- Property I/O --
+propName.addEventListener('input', () => {
+  currentLevel().name = propName.value;
+  markThumbDirty(currentIndex);
+});
+propMoney.addEventListener('input', () => { currentLevel().startingMoney = parseInt(propMoney.value) || 0; });
+
+function commitProps() {
+  const lv = currentLevel();
+  lv.name = propName.value;
+  lv.startingMoney = parseInt(propMoney.value) || 0;
+}
+
+// -- Streams sidebar (simplified: list with delete) --
+function buildStreamsUI() {
+  streamsContainer.innerHTML = '';
+  const streams = currentLevel().streams;
+  streams.forEach((channels, si) => {
+    const div = document.createElement('div');
+    div.className = 'stream-item';
+
+    const swatch = document.createElement('div');
+    swatch.className = 'swatch';
+    swatch.style.background = STREAM_HANDLE_COLORS[si] || '#fff';
+    div.appendChild(swatch);
+
+    const label = document.createElement('span');
+    label.textContent = 'Stream ' + (si + 1);
+    div.appendChild(label);
+
+    const delBtn = document.createElement('button');
+    delBtn.textContent = 'Remove';
+    delBtn.addEventListener('click', () => {
+      streams.splice(si, 1);
+      buildStreamsUI();
+      markThumbDirty(currentIndex);
+    });
+    div.appendChild(delBtn);
+
+    streamsContainer.appendChild(div);
+  });
+}
+
+// -- Sync UI --
+function syncUI() {
+  const lv = currentLevel();
+  propName.value = lv.name;
+  propMoney.value = lv.startingMoney;
+  buildStreamsUI();
+  buildThumbnailStrip();
+}
+
+// -- Rendering --
+function startAnim() {
+  (function tick() {
+    animTime = performance.now() / 1000;
+    render();
+    requestAnimationFrame(tick);
+  })();
+}
+
+function render() {
+  // Background gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+  grad.addColorStop(0, COLORS.WATER_LIGHT);
+  grad.addColorStop(1, COLORS.WATER_DARK);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // Streams
+  renderStreams();
+
+  // Grid cells
+  const lv = currentLevel();
+  for (let r = 0; r < GRID_ROWS; r++) {
+    for (let c = 0; c < GRID_COLS; c++) {
+      const cx = MARGIN + c * CELL_SIZE + CELL_SIZE / 2;
+      const cy = MARGIN + r * CELL_SIZE + CELL_SIZE / 2;
+      const code = lv.grid[r][c];
+      const size = CELL_SIZE * 0.5;
+      if (code === 'L' || code === 'W') renderLilyPad(cx, cy, size);
+      if (code === 'W') renderLily(cx, cy, size * 0.4);
+      if (code === 'R') renderRock(cx, cy, size);
+    }
+  }
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  for (let r = 0; r <= GRID_ROWS; r++) {
+    ctx.beginPath();
+    ctx.moveTo(MARGIN, MARGIN + r * CELL_SIZE);
+    ctx.lineTo(MARGIN + GRID_COLS * CELL_SIZE, MARGIN + r * CELL_SIZE);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= GRID_COLS; c++) {
+    ctx.beginPath();
+    ctx.moveTo(MARGIN + c * CELL_SIZE, MARGIN);
+    ctx.lineTo(MARGIN + c * CELL_SIZE, MARGIN + GRID_ROWS * CELL_SIZE);
+    ctx.stroke();
+  }
+
+  // Channel markers
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'center';
+  for (let ch = 0; ch <= GRID_COLS; ch++) {
+    const x = MARGIN + ch * CELL_SIZE;
+    ctx.fillText(ch.toString(), x, MARGIN + GRID_ROWS * CELL_SIZE + 14);
+  }
+
+  // Stream handles
+  renderHandles();
+
+  // "+" add buttons
+  renderAddButtons();
+}
+
+// -- Stream handles --
+function renderHandles() {
+  const streams = currentLevel().streams;
+  for (let si = 0; si < streams.length; si++) {
+    const color = STREAM_HANDLE_COLORS[si] || '#fff';
+    for (let r = 0; r < GRID_ROWS; r++) {
+      const hp = getHandlePos(si, r);
+      const isHover = hoverInfo && hoverInfo.type === 'handle' &&
+                      hoverInfo.streamIdx === si && hoverInfo.row === r;
+      const isDrag = dragState && dragState.streamIdx === si && dragState.row === r;
+      const radius = (isHover || isDrag) ? HANDLE_RADIUS_HOVER : HANDLE_RADIUS;
+
+      ctx.save();
+      if (isDrag) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+      }
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(hp.x, hp.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+// -- "+" add buttons --
+function renderAddButtons() {
+  const streams = currentLevel().streams;
+  if (streams.length >= 3) return;
+  const usedChannels = new Set(streams.map(s => s[0]));
+
+  for (const ch of [1, 2, 3]) {
+    if (usedChannels.has(ch)) continue;
+    const bx = channelX(ch);
+    const by = ADD_BTN_Y;
+    const isHover = hoverInfo && hoverInfo.type === 'addBtn' && hoverInfo.channel === ch;
+
+    ctx.save();
+    ctx.fillStyle = isHover ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)';
+    ctx.strokeStyle = isHover ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(bx, by, ADD_BTN_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = isHover ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('+', bx, by);
+    ctx.restore();
+  }
+}
+
+// -- Stream path rendering (ported from game) --
+function channelsToSegments(channels) {
+  if (!channels || channels.length === 0) return [];
+  const elements = [];
+  const cr = CORNER_RADIUS_SEG;
+
+  const entryX = MARGIN + channels[0] * CELL_SIZE;
+  let currentY = MARGIN + CELL_SIZE;
+  elements.push({ start: { x: entryX, y: 0 }, end: { x: entryX, y: currentY - cr } });
+
+  for (let row = 0; row < channels.length - 1; row++) {
+    const cur = channels[row];
+    const nxt = channels[row + 1];
+    const curX = MARGIN + cur * CELL_SIZE;
+    const nxtX = MARGIN + nxt * CELL_SIZE;
+    currentY = MARGIN + (row + 1) * CELL_SIZE;
+    const nextY = MARGIN + (row + 2) * CELL_SIZE;
+
+    if (cur !== nxt) {
+      const sign = nxt > cur ? 1 : -1;
+      elements.push({ entry: { x: curX, y: currentY - cr }, exit: { x: curX + sign * cr, y: currentY } });
+      elements.push({ start: { x: curX + sign * cr, y: currentY }, end: { x: nxtX - sign * cr, y: currentY } });
+      elements.push({ entry: { x: nxtX - sign * cr, y: currentY }, exit: { x: nxtX, y: currentY + cr } });
+      elements.push({ start: { x: nxtX, y: currentY + cr }, end: { x: nxtX, y: nextY - cr } });
+    } else {
+      elements.push({ start: { x: curX, y: currentY - cr }, end: { x: curX, y: nextY - cr } });
+    }
+  }
+
+  const exitX = MARGIN + channels[channels.length - 1] * CELL_SIZE;
+  const exitY = MARGIN + channels.length * CELL_SIZE;
+  elements.push({ start: { x: exitX, y: exitY - cr }, end: { x: exitX, y: CANVAS_H } });
+
+  return elements;
+}
+
+function extractLineSegments(elements) {
+  const segs = [];
+  for (const el of elements) {
+    if (el.start) segs.push(el);
+    else segs.push({ start: el.entry, end: el.exit });
+  }
+  return segs;
+}
+
+function chaikinSmooth(points) {
+  if (points.length < 3) return points;
+  const out = [points[0]];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i], p1 = points[i + 1];
+    if (Math.abs(p0.x - p1.x) < 0.1 && Math.abs(p0.y - p1.y) < 0.1) continue;
+    out.push({ x: 0.8 * p0.x + 0.2 * p1.x, y: 0.8 * p0.y + 0.2 * p1.y });
+    out.push({ x: 0.2 * p0.x + 0.8 * p1.x, y: 0.2 * p0.y + 0.8 * p1.y });
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
+function generateSmoothPath(segments) {
+  if (segments.length === 0) return [];
+  let base = [];
+  for (const seg of segments) {
+    const dx = seg.end.x - seg.start.x;
+    const dy = seg.end.y - seg.start.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 0.01) continue;
+    const ux = dx / len, uy = dy / len;
+    const trim = Math.min(PATH_CORNER_RADIUS, len * 0.4);
+    base.push({ x: seg.start.x + ux * trim, y: seg.start.y + uy * trim });
+    base.push({ x: seg.end.x - ux * trim, y: seg.end.y - uy * trim });
+  }
+  let path = base;
+  for (let i = 0; i < SMOOTHING_PASSES; i++) path = chaikinSmooth(path);
+  return path;
+}
+
+function renderStreams() {
+  const lv = currentLevel();
+  if (!lv.streams) return;
+  lv.streams.forEach(channels => {
+    const elements = channelsToSegments(channels);
+    const segs = extractLineSegments(elements);
+    const points = generateSmoothPath(segs);
+    if (points.length < 2) return;
+
+    const tracePath = () => {
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    };
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = COLORS.STREAM;
+    ctx.lineWidth = 18;
+    tracePath(); ctx.stroke();
+
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = 'rgba(140, 200, 220, 1)';
+    ctx.lineWidth = 9;
+    ctx.setLineDash([15, 25]);
+    ctx.lineDashOffset = -animTime * 24;
+    tracePath(); ctx.stroke();
+
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = 'rgba(220, 240, 255, 1)';
+    ctx.lineWidth = 6;
+    ctx.setLineDash([8, 35]);
+    ctx.lineDashOffset = -animTime * 36;
+    tracePath(); ctx.stroke();
+
+    ctx.restore();
+  });
+}
+
+// -- Cell rendering (ported from game Renderer.ts) --
+function renderLilyPad(x, y, size) {
+  ctx.fillStyle = COLORS.LILYPAD;
+  ctx.beginPath();
+  ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#78C878';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function renderLily(x, y, size) {
+  ctx.fillStyle = COLORS.LILY;
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * Math.PI * 2) / 5;
+    const px = x + Math.cos(angle) * size * 0.3;
+    const py = y + Math.sin(angle) * size * 0.3;
+    ctx.beginPath();
+    ctx.arc(px, py, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#FFD700';
+  ctx.beginPath();
+  ctx.arc(x, y, size / 3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function renderRock(x, y, size) {
+  ctx.fillStyle = COLORS.ROCK;
+  ctx.strokeStyle = '#606060';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - size / 2, y);
+  ctx.lineTo(x - size / 4, y - size / 2);
+  ctx.lineTo(x + size / 4, y - size / 3);
+  ctx.lineTo(x + size / 2, y);
+  ctx.lineTo(x + size / 3, y + size / 2);
+  ctx.lineTo(x - size / 3, y + size / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+// -- Keyboard shortcuts --
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key) {
+    case '1': selectTool('E'); break;
+    case '2': selectTool('L'); break;
+    case '3': selectTool('W'); break;
+    case '4': selectTool('R'); break;
+    case 'ArrowLeft':
+      if (!guardUnsaved()) break;
+      currentIndex = (currentIndex - 1 + levels.length) % levels.length;
+      syncUI();
+      break;
+    case 'ArrowRight':
+      if (!guardUnsaved()) break;
+      currentIndex = (currentIndex + 1) % levels.length;
+      syncUI();
+      break;
+  }
+});
+
+function selectTool(code) {
+  currentTool = code;
+  document.querySelectorAll('.tool-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tool === code);
+  });
+}
+
+// -- Go --
+init();
+</script>
+</body>
+</html>

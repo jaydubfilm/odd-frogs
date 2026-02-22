@@ -4,21 +4,39 @@ import { FrogSelector } from './components/ui/FrogSelector';
 import { FrogPreview } from './components/ui/FrogPreview';
 import { GameStats } from './components/ui/GameStats';
 import { LevelMap } from './components/ui/LevelMap';
+import { RiverSelect } from './components/ui/RiverSelect';
 import { FrogSelectionScreen } from './components/ui/FrogSelectionScreen';
 import { FrogUnlockedScreen } from './components/ui/FrogUnlockedScreen';
 import { SettingsModal } from './components/ui/SettingsModal';
-import { GameState, FrogType, LevelProgress } from './types/game';
+import { GameState, FrogType, LevelProgress, RiverDefinition, ConsumableType, ConsumableInventory } from './types/game';
+import { ConsumableSelector, ConsumableIcon } from './components/ui/ConsumableSelector';
 import { ProceduralLevelGenerator } from './game/utils/ProceduralLevelGenerator';
-import { FROG_UNLOCK_LEVEL } from './data/constants';
+import { FROG_UNLOCK_LEVEL, CONSUMABLE_CONFIG } from './data/constants';
+import { RIVERS } from './data/rivers';
 import './styles/index.css';
+
+function createRiverProgress(): Record<string, LevelProgress[]> {
+  const progress: Record<string, LevelProgress[]> = {};
+  for (const river of RIVERS) {
+    progress[river.id] = Array.from({ length: river.levelCount }, (_, i) => ({
+      levelNumber: i + 1,
+      completed: false,
+      stars: 0,
+      unlocked: river.unlockRequirement === null && i === 0,
+    }));
+  }
+  return progress;
+}
 
 function App() {
   const levelGeneratorRef = useRef(new ProceduralLevelGenerator());
   const gameCanvasRef = useRef<GameCanvasHandle>(null);
 
-  // Level selection state
-  const [showLevelMap, setShowLevelMap] = useState(true);
+  // River & level selection state
+  const [showRiverSelect, setShowRiverSelect] = useState(true);
+  const [showLevelMap, setShowLevelMap] = useState(false);
   const [showFrogSelection, setShowFrogSelection] = useState(false);
+  const [selectedRiverId, setSelectedRiverId] = useState('rio-ribbit');
   const [selectedLevel, setSelectedLevel] = useState(1);
   const [selectedFrogTypes, setSelectedFrogTypes] = useState<FrogType[]>([]);
   const [newlyUnlockedFrog, setNewlyUnlockedFrog] = useState<FrogType | null>(null);
@@ -37,26 +55,51 @@ function App() {
     startTime: number;
   } | null>(null);
 
-  // Initialize level progress (20 levels)
-  const [levelProgress, setLevelProgress] = useState<LevelProgress[]>(() => {
-    return Array.from({ length: 100 }, (_, i) => ({
-      levelNumber: i + 1,
-      completed: false,
-      stars: 0,
-      unlocked: i === 0, // Only first level unlocked
-    }));
+  // Consumable state
+  const [showConsumables, setShowConsumables] = useState(false);
+  const [consumables, setConsumables] = useState<Record<ConsumableType, ConsumableInventory>>({
+    [ConsumableType.RAIN]: { count: CONSUMABLE_CONFIG.STARTING_COUNT, cooldownUntil: 0 },
+    [ConsumableType.HEAL]: { count: CONSUMABLE_CONFIG.STARTING_COUNT, cooldownUntil: 0 },
+    [ConsumableType.WHIRLPOOL]: { count: CONSUMABLE_CONFIG.STARTING_COUNT, cooldownUntil: 0 },
   });
+  const [draggingConsumable, setDraggingConsumable] = useState<{
+    type: ConsumableType;
+    x: number; y: number;
+    startX: number; startY: number;
+    startTime: number;
+  } | null>(null);
+  const [activeConsumable, setActiveConsumable] = useState<ConsumableType | null>(null);
 
-  // Derive unlocked frog types from level progress
+  // River progress (20 levels per river)
+  const [riverProgress, setRiverProgress] = useState<Record<string, LevelProgress[]>>(createRiverProgress);
+
+  const selectedRiver = useMemo(
+    () => RIVERS.find(r => r.id === selectedRiverId) ?? RIVERS[0],
+    [selectedRiverId]
+  );
+
+  const isRiverUnlocked = useCallback((riverId: string): boolean => {
+    const river = RIVERS.find(r => r.id === riverId);
+    if (!river) return false;
+    if (!river.unlockRequirement) return true;
+    const { riverId: reqRiverId, stars: reqStars } = river.unlockRequirement;
+    const reqProgress = riverProgress[reqRiverId];
+    if (!reqProgress) return false;
+    const totalStars = reqProgress.reduce((sum, lp) => sum + lp.stars, 0);
+    return totalStars >= reqStars;
+  }, [riverProgress]);
+
+  // Derive unlocked frog types from rio-ribbit progress only
   const unlockedFrogTypes = useMemo(() => {
-    const highestUnlocked = levelProgress.reduce(
+    const ribbitProgress = riverProgress['rio-ribbit'] || [];
+    const highestUnlocked = ribbitProgress.reduce(
       (max, lp) => (lp.unlocked ? Math.max(max, lp.levelNumber) : max),
       1
     );
     return Object.values(FrogType).filter(
       ft => FROG_UNLOCK_LEVEL[ft] <= highestUnlocked
     );
-  }, [levelProgress]);
+  }, [riverProgress]);
 
   const [level, setLevel] = useState(() =>
     levelGeneratorRef.current.generateLevel(1)
@@ -76,6 +119,7 @@ function App() {
     selectedFrog: null,
     selectedGridCell: null,
     gameSpeed: 1,
+    showConsumables: false,
   });
 
   const [waveInfo, setWaveInfo] = useState({
@@ -88,9 +132,20 @@ function App() {
     localStorage.setItem('handedness', handedness);
   }, [handedness]);
 
+  const handleSelectRiver = (riverId: string) => {
+    setSelectedRiverId(riverId);
+    setShowRiverSelect(false);
+    setShowLevelMap(true);
+  };
+
+  const handleBackToRiverSelect = () => {
+    setShowLevelMap(false);
+    setShowRiverSelect(true);
+  };
+
   const handleSelectLevel = (levelNumber: number) => {
     setSelectedLevel(levelNumber);
-    const proceduralLevel = levelGeneratorRef.current.generateLevel(levelNumber);
+    const proceduralLevel = levelGeneratorRef.current.generateLevel(levelNumber, selectedRiver);
     setLevel(proceduralLevel);
 
     setShowLevelMap(false);
@@ -116,7 +171,17 @@ function App() {
       selectedFrog: null,
       selectedGridCell: null,
       gameSpeed: 1,
+      showConsumables: false,
     });
+
+    // Reset consumables for new level
+    setShowConsumables(false);
+    setConsumables({
+      [ConsumableType.RAIN]: { count: CONSUMABLE_CONFIG.STARTING_COUNT, cooldownUntil: 0 },
+      [ConsumableType.HEAL]: { count: CONSUMABLE_CONFIG.STARTING_COUNT, cooldownUntil: 0 },
+      [ConsumableType.WHIRLPOOL]: { count: CONSUMABLE_CONFIG.STARTING_COUNT, cooldownUntil: 0 },
+    });
+    setActiveConsumable(null);
   };
 
   const handleBackFromSelection = () => {
@@ -124,87 +189,89 @@ function App() {
     setShowLevelMap(true);
   };
 
-  const handleLevelComplete = useCallback(() => {
-    console.log('Level complete! Current level:', selectedLevel);
-
-    // Mark current level as completed
-    setLevelProgress(prev => {
-      const updated = [...prev];
+  const updateProgressAfterComplete = useCallback(() => {
+    setRiverProgress(prev => {
+      const riverId = selectedRiverId;
+      const currentProgress = [...(prev[riverId] || [])];
       const currentIndex = selectedLevel - 1;
 
-      updated[currentIndex] = {
-        ...updated[currentIndex],
+      currentProgress[currentIndex] = {
+        ...currentProgress[currentIndex],
         completed: true,
         stars: calculateStars(gameState),
       };
 
-      // Unlock next level
-      if (currentIndex + 1 < updated.length) {
-        updated[currentIndex + 1] = {
-          ...updated[currentIndex + 1],
+      // Unlock next level in same river
+      if (currentIndex + 1 < currentProgress.length) {
+        currentProgress[currentIndex + 1] = {
+          ...currentProgress[currentIndex + 1],
           unlocked: true,
         };
       }
 
+      const updated = { ...prev, [riverId]: currentProgress };
+
+      // Check if this river now meets the star threshold to unlock dependent rivers
+      const totalStars = currentProgress.reduce((sum, lp) => sum + lp.stars, 0);
+      for (const river of RIVERS) {
+        if (river.unlockRequirement && river.unlockRequirement.riverId === riverId && totalStars >= river.unlockRequirement.stars) {
+          const depProgress = [...(updated[river.id] || [])];
+          if (depProgress.length > 0 && !depProgress[0].unlocked) {
+            depProgress[0] = { ...depProgress[0], unlocked: true };
+            updated[river.id] = depProgress;
+          }
+        }
+      }
+
       return updated;
     });
+  }, [selectedRiverId, selectedLevel, gameState]);
 
-    // Check if beating this level unlocks a new frog
-    const nextLevel = selectedLevel + 1;
-    const unlockedFrog = Object.entries(FROG_UNLOCK_LEVEL).find(
-      ([, lvl]) => lvl === nextLevel
-    );
+  const handleLevelComplete = useCallback(() => {
+    console.log('Level complete! Current level:', selectedLevel);
+    updateProgressAfterComplete();
 
-    if (unlockedFrog) {
-      setNewlyUnlockedFrog(unlockedFrog[0] as FrogType);
-    } else {
-      setShowLevelMap(true);
+    // Check if beating this level unlocks a new frog (rio-ribbit only)
+    if (selectedRiverId === 'rio-ribbit') {
+      const nextLevel = selectedLevel + 1;
+      const unlockedFrog = Object.entries(FROG_UNLOCK_LEVEL).find(
+        ([, lvl]) => lvl === nextLevel
+      );
+
+      if (unlockedFrog) {
+        setNewlyUnlockedFrog(unlockedFrog[0] as FrogType);
+        return;
+      }
     }
-  }, [selectedLevel, gameState.lives]);
+
+    setShowLevelMap(true);
+  }, [selectedLevel, selectedRiverId, updateProgressAfterComplete]);
 
   const calculateStars = (state: GameState): number => {
-    // Award stars based on performance
-    if (state.lives === 3) return 3;
-    if (state.lives === 2) return 2;
+    if (state.lives >= 20) return 3;
+    if (state.lives >= 10) return 2;
     return 1;
   };
 
   const handleUnlockAll = useCallback(() => {
-    setLevelProgress(prev =>
-      prev.map(level => ({
-        ...level,
-        unlocked: true,
-      }))
-    );
+    setRiverProgress(prev => {
+      const updated: Record<string, LevelProgress[]> = {};
+      for (const riverId of Object.keys(prev)) {
+        updated[riverId] = prev[riverId].map(lp => ({
+          ...lp,
+          unlocked: true,
+        }));
+      }
+      return updated;
+    });
   }, []);
 
   const handleBackToMap = useCallback(() => {
-    // If returning from a victory, mark level as complete
     if (gameState.isVictory) {
-      setLevelProgress(prev => {
-        const updated = [...prev];
-        const currentIndex = selectedLevel - 1;
-
-        updated[currentIndex] = {
-          ...updated[currentIndex],
-          completed: true,
-          stars: calculateStars(gameState),
-        };
-
-        // Unlock next level
-        if (currentIndex + 1 < updated.length) {
-          updated[currentIndex + 1] = {
-            ...updated[currentIndex + 1],
-            unlocked: true,
-          };
-        }
-
-        return updated;
-      });
+      updateProgressAfterComplete();
     }
-
     setShowLevelMap(true);
-  }, [gameState, selectedLevel]);
+  }, [gameState, updateProgressAfterComplete]);
 
   const handleSelectFrog = (frogType: FrogType) => {
     setGameState(prev => ({
@@ -215,6 +282,7 @@ function App() {
 
   const handleGameStateChange = (newState: GameState) => {
     setGameState(newState);
+    setShowConsumables(newState.showConsumables);
   };
 
   const handleWaveInfoChange = (newWaveInfo: { current: number; total: number; timeUntilNext: number }) => {
@@ -226,7 +294,6 @@ function App() {
     setDragging({ frogType, x: startX, y: startY, startX, startY, startTime: Date.now() });
   }, []);
 
-  // Dynamic offset: the higher the thumb, the further the frog icon floats above it
   const getDragOffsetY = (clientY: number): number => {
     const screenHeight = window.innerHeight;
     const normalizedY = Math.max(0, Math.min(1, 1 - clientY / screenHeight));
@@ -235,19 +302,14 @@ function App() {
     return BASE_OFFSET + normalizedY * MAX_EXTRA_OFFSET;
   };
 
-  // Horizontal offset: stretches reach diagonally away from the dominant hand.
-  // Normalized (0,0) = handedness-side frog buttons, (1,1) = opposite top corner.
-  // offset = MAX * x * y  →  zero along either axis, max at the diagonal.
   const getDragOffsetX = (clientX: number, clientY: number): number => {
     const rect = gameCanvasRef.current?.getCanvasRect();
     if (!rect) return 0;
 
-    // X axis: 0 at handedness edge of canvas, 1 at opposite edge
     const normalizedX = handedness === 'right'
       ? Math.max(0, (rect.right - clientX) / rect.width)
       : Math.max(0, (clientX - rect.left) / rect.width);
 
-    // Y axis: 0 at bottom of screen (frog buttons), 1 at top of canvas
     const normalizedY = Math.max(0, (window.innerHeight - clientY) / (window.innerHeight - rect.top));
 
     const MAX_OFFSET = 200;
@@ -256,22 +318,80 @@ function App() {
     return result;
   };
 
-  const handlePointerMoveDrag = useCallback((e: React.PointerEvent) => {
-    if (!dragging) return;
-    setDragging(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
-    if (gameCanvasRef.current) {
-      gameCanvasRef.current.updateDragHighlight(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY), dragging.frogType);
+  // Consumable handlers
+  const handleUseConsumable = useCallback((type: ConsumableType) => {
+    const inv = consumables[type];
+    if (inv.count <= 0 || (inv.cooldownUntil > 0 && Date.now() < inv.cooldownUntil)) return;
+
+    if (type === ConsumableType.RAIN) {
+      gameCanvasRef.current?.applyRain();
+      setConsumables(prev => ({
+        ...prev,
+        [type]: { count: prev[type].count - 1, cooldownUntil: Date.now() + CONSUMABLE_CONFIG.COOLDOWN_MS },
+      }));
+    } else if (type === ConsumableType.HEAL) {
+      gameCanvasRef.current?.applyHeal();
+      setConsumables(prev => ({
+        ...prev,
+        [type]: { count: prev[type].count - 1, cooldownUntil: Date.now() + CONSUMABLE_CONFIG.COOLDOWN_MS },
+      }));
+    } else if (type === ConsumableType.WHIRLPOOL) {
+      setActiveConsumable(ConsumableType.WHIRLPOOL);
     }
-  }, [dragging, handedness]);
+  }, [consumables]);
+
+  const handleConsumableDragStart = useCallback((type: ConsumableType, startX: number, startY: number) => {
+    setDraggingConsumable({ type, x: startX, y: startY, startX, startY, startTime: Date.now() });
+    setActiveConsumable(null);
+  }, []);
+
+  // Cooldown tick for re-rendering countdown
+  useEffect(() => {
+    if (!showConsumables) return;
+    const interval = setInterval(() => {
+      setConsumables(prev => ({ ...prev }));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showConsumables]);
+
+  const handlePointerMoveDrag = useCallback((e: React.PointerEvent) => {
+    if (dragging) {
+      setDragging(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+      if (gameCanvasRef.current) {
+        gameCanvasRef.current.updateDragHighlight(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY), dragging.frogType);
+      }
+    }
+    if (draggingConsumable) {
+      setDraggingConsumable(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+      if (gameCanvasRef.current) {
+        gameCanvasRef.current.updateWhirlpoolHighlight(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY));
+      }
+    }
+  }, [dragging, draggingConsumable, handedness]);
 
   const handlePointerUpDrag = useCallback((e: React.PointerEvent) => {
-    if (!dragging) return;
-    if (gameCanvasRef.current) {
-      gameCanvasRef.current.placeFrogAtScreenPos(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY), dragging.frogType);
-      gameCanvasRef.current.clearDragHighlight();
+    if (dragging) {
+      if (gameCanvasRef.current) {
+        gameCanvasRef.current.placeFrogAtScreenPos(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY), dragging.frogType);
+        gameCanvasRef.current.clearDragHighlight();
+      }
+      setDragging(null);
     }
-    setDragging(null);
-  }, [dragging, handedness]);
+    if (draggingConsumable) {
+      if (gameCanvasRef.current) {
+        gameCanvasRef.current.placeWhirlpoolAtScreenPos(e.clientX + getDragOffsetX(e.clientX, e.clientY), e.clientY + getDragOffsetY(e.clientY));
+        gameCanvasRef.current.clearWhirlpoolHighlight();
+      }
+      setConsumables(prev => ({
+        ...prev,
+        [ConsumableType.WHIRLPOOL]: {
+          count: prev[ConsumableType.WHIRLPOOL].count - 1,
+          cooldownUntil: Date.now() + CONSUMABLE_CONFIG.COOLDOWN_MS,
+        },
+      }));
+      setDraggingConsumable(null);
+    }
+  }, [dragging, draggingConsumable, handedness]);
 
   return (
     <div
@@ -288,12 +408,22 @@ function App() {
             setShowLevelMap(true);
           }}
         />
+      ) : showRiverSelect ? (
+        <RiverSelect
+          rivers={RIVERS}
+          riverProgress={riverProgress}
+          onSelectRiver={handleSelectRiver}
+          onOpenSettings={() => setShowSettings(true)}
+          isRiverUnlocked={isRiverUnlocked}
+        />
       ) : showLevelMap ? (
         <LevelMap
-          progress={levelProgress}
+          progress={riverProgress[selectedRiverId] || []}
+          river={selectedRiver}
           onSelectLevel={handleSelectLevel}
           onUnlockAll={handleUnlockAll}
           onOpenSettings={() => setShowSettings(true)}
+          onBack={handleBackToRiverSelect}
         />
       ) : showFrogSelection ? (
         <FrogSelectionScreen
@@ -308,12 +438,6 @@ function App() {
           <div className="h-full flex flex-col px-1">
             {/* Mobile: Combined header + stats bar */}
             <div className="lg:hidden flex-shrink-0 flex items-center gap-2 py-1">
-              <button
-                onClick={handleBackToMap}
-                className="px-2 py-1 bg-white rounded shadow text-xs font-bold flex-shrink-0"
-              >
-                ←
-              </button>
               <span className="text-white font-bold text-sm drop-shadow flex-shrink-0">
                 Lv {selectedLevel}
               </span>
@@ -324,12 +448,6 @@ function App() {
 
             {/* Desktop: Full header */}
             <div className="hidden lg:block text-center mb-2 flex-shrink-0">
-              <button
-                onClick={handleBackToMap}
-                className="mb-4 px-6 py-2 bg-white rounded-lg shadow-lg hover:bg-gray-100 font-bold"
-              >
-                ← Back to Map
-              </button>
               <h1 className="text-6xl font-bold text-white mb-2 drop-shadow-lg">
                 OddFrogs - Level {selectedLevel}
               </h1>
@@ -345,26 +463,22 @@ function App() {
                 onGameStateChange={handleGameStateChange}
                 onWaveInfoChange={handleWaveInfoChange}
                 onLevelComplete={handleLevelComplete}
+                onBackToMap={handleBackToMap}
                 handedness={handedness}
               />
             </div>
 
-            {/* Mobile: Frog selector at bottom */}
+            {/* Mobile: Frog/Consumable selector at bottom */}
             <div className="lg:hidden flex-shrink-0 pb-1">
-              <FrogSelector
-                selectedFrog={gameState.selectedFrogType}
-                onSelectFrog={handleSelectFrog}
-                onDragStart={handleDragStart}
-                draggingFrogType={dragging?.frogType ?? null}
-                playerMoney={gameState.money}
-                handedness={handedness}
-                availableFrogTypes={selectedFrogTypes.length > 0 ? selectedFrogTypes : undefined}
-              />
-            </div>
-
-            {/* Desktop: Side panels */}
-            <div className="hidden lg:flex flex-row gap-6 justify-center">
-              <div className="w-80">
+              {showConsumables ? (
+                <ConsumableSelector
+                  consumableState={consumables}
+                  onUseConsumable={handleUseConsumable}
+                  onDragStart={handleConsumableDragStart}
+                  draggingConsumable={draggingConsumable?.type ?? null}
+                  handedness={handedness}
+                />
+              ) : (
                 <FrogSelector
                   selectedFrog={gameState.selectedFrogType}
                   onSelectFrog={handleSelectFrog}
@@ -374,6 +488,31 @@ function App() {
                   handedness={handedness}
                   availableFrogTypes={selectedFrogTypes.length > 0 ? selectedFrogTypes : undefined}
                 />
+              )}
+            </div>
+
+            {/* Desktop: Side panels */}
+            <div className="hidden lg:flex flex-row gap-6 justify-center">
+              <div className="w-80">
+                {showConsumables ? (
+                  <ConsumableSelector
+                    consumableState={consumables}
+                    onUseConsumable={handleUseConsumable}
+                    onDragStart={handleConsumableDragStart}
+                    draggingConsumable={draggingConsumable?.type ?? null}
+                    handedness={handedness}
+                  />
+                ) : (
+                  <FrogSelector
+                    selectedFrog={gameState.selectedFrogType}
+                    onSelectFrog={handleSelectFrog}
+                    onDragStart={handleDragStart}
+                    draggingFrogType={dragging?.frogType ?? null}
+                    playerMoney={gameState.money}
+                    handedness={handedness}
+                    availableFrogTypes={selectedFrogTypes.length > 0 ? selectedFrogTypes : undefined}
+                  />
+                )}
               </div>
               <div className="w-80">
                 <GameStats gameState={gameState} waveInfo={waveInfo} />
@@ -388,6 +527,7 @@ function App() {
           handedness={handedness}
           onHandednessChange={setHandedness}
           onClose={() => setShowSettings(false)}
+          onUnlockAll={handleUnlockAll}
         />
       )}
 
@@ -410,6 +550,30 @@ function App() {
           >
             <div className="w-[60px] h-[60px]">
               <FrogPreview frogType={dragging.frogType} size={60} />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Consumable drag ghost */}
+      {draggingConsumable && draggingConsumable.x !== 0 && (() => {
+        const LERP_DURATION = 150;
+        const elapsed = Date.now() - draggingConsumable.startTime;
+        const t = Math.min(1, elapsed / LERP_DURATION);
+        const ease = t * (2 - t);
+        const offsetY = getDragOffsetY(draggingConsumable.y);
+        const offsetX = getDragOffsetX(draggingConsumable.x, draggingConsumable.y);
+        const targetX = draggingConsumable.x + offsetX - 30;
+        const targetY = draggingConsumable.y + offsetY - 30;
+        const lerpX = draggingConsumable.startX - 30 + (targetX - (draggingConsumable.startX - 30)) * ease;
+        const lerpY = draggingConsumable.startY - 30 + (targetY - (draggingConsumable.startY - 30)) * ease;
+        return (
+          <div
+            className="fixed pointer-events-none z-50"
+            style={{ left: lerpX, top: lerpY }}
+          >
+            <div className="w-[60px] h-[60px] flex items-center justify-center">
+              <ConsumableIcon type={draggingConsumable.type} size={50} />
             </div>
           </div>
         );
