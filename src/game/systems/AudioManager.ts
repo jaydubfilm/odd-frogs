@@ -35,6 +35,25 @@
     }
   }
 
+  playPop(volume: number = 0.4): void {
+    const ctx = this.audioContext;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(150, now + 0.08);
+
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+
+    osc.start(now);
+    osc.stop(now + 0.1);
+  }
+
   private playSynthesizedSlurp(volume: number): void {
     const ctx = this.audioContext;
     const now = ctx.currentTime;

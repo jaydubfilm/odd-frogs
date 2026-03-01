@@ -15,6 +15,7 @@ interface GameCanvasProps {
   consumableReady?: boolean;
   activeConsumable?: string | null;
   onConsumablePlaced?: (type: string, canvasX: number, canvasY: number) => void;
+  onFrogPlaced?: (frogCount: number) => void;
 }
 
 export interface GameCanvasHandle {
@@ -42,6 +43,7 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
   consumableReady = false,
   activeConsumable = null,
   onConsumablePlaced,
+  onFrogPlaced,
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameEngineRef = useRef<GameEngine | null>(null);
@@ -194,6 +196,12 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
       gameEngineRef.current.onConsumablePlaced = onConsumablePlaced ?? null;
     }
   }, [onConsumablePlaced]);
+
+  useEffect(() => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.onFrogPlaced = onFrogPlaced ?? null;
+    }
+  }, [onFrogPlaced]);
 
   // Expose game engine state to parent component
   useEffect(() => {

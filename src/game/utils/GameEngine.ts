@@ -7,9 +7,10 @@ import {
   GridPosition,
   FrogType,
   CellType,
+  FoodCrumb,
 } from '../../types/game';
 import { UpgradePath } from '../../types/upgrades';
-import { GAME_CONFIG, UPGRADE_PATH_COSTS, FROG_STATS } from '@data/constants';
+import { GAME_CONFIG, UPGRADE_PATH_COSTS, FROG_STATS, UPGRADE_TOKEN_CONFIG } from '@data/constants';
 import { Renderer } from './../systems/Renderer';
 import { FrogSystem } from './../systems/FrogSystem';
 import { FoodSystem } from './../systems/FoodSystem';
@@ -23,6 +24,7 @@ import { AoeEffectSystem } from './../systems/AoeEffectSystem';
 import { SynergyVisualSystem } from './../systems/SynergyVisualSystem';
 import { ConsumableSystem } from './../systems/ConsumableSystem';
 import { HeartFloatSystem } from './../systems/HeartFloatSystem';
+import { UpgradeTokenSystem } from './../systems/UpgradeTokenSystem';
 
 
 export class GameEngine {
@@ -58,11 +60,22 @@ export class GameEngine {
   private synergyVisualSystem: SynergyVisualSystem;
   private consumableSystem: ConsumableSystem;
   private heartFloatSystem: HeartFloatSystem;
+  private upgradeTokenSystem: UpgradeTokenSystem;
   private whirlpoolHighlight: { x: number; y: number } | null = null;
+
+  // Food crumbs (burst + sink on food death)
+  private foodCrumbs: FoodCrumb[] = [];
+
+  // Token drag state
+  private draggingToken: string | null = null;
+  private draggingTokenPos: { x: number; y: number } = { x: 0, y: 0 };
+  private highlightedFrog: { id: string; compatible: boolean } | null = null;
+  private suppressClick: boolean = false;
 
   // Callbacks
   onVictoryContinue: (() => void) | null = null;
   onBackToMap: (() => void) | null = null;
+  onFrogPlaced: ((frogCount: number) => void) | null = null;
 
   // Game loop
   private lastFrameTime: number = 0;
@@ -92,6 +105,7 @@ export class GameEngine {
       gameSpeed: 1,
       showConsumables: false,
       hasConsumables: true,
+      allLilypadsFilled: false,
     };
 
     // Initialize systems
@@ -109,6 +123,8 @@ export class GameEngine {
     this.synergyVisualSystem = new SynergyVisualSystem();
     this.consumableSystem = new ConsumableSystem();
     this.heartFloatSystem = new HeartFloatSystem();
+    this.upgradeTokenSystem = new UpgradeTokenSystem();
+    this.upgradeTokenSystem.onTokenPop = () => this.audioManager.playPop(0.4);
 
     // Setup canvas
     this.canvas.width = GAME_CONFIG.canvasWidth;
@@ -118,10 +134,16 @@ export class GameEngine {
     this.gameLoop = this.gameLoop.bind(this);
     this.handleCanvasClick = this.handleCanvasClick.bind(this);
     this.handleMouseMove = this.handleMouseMove.bind(this);
+    this.handlePointerDown = this.handlePointerDown.bind(this);
+    this.handlePointerMove = this.handlePointerMove.bind(this);
+    this.handlePointerUp = this.handlePointerUp.bind(this);
 
     // Setup event listeners
     this.canvas.addEventListener('click', this.handleCanvasClick);
     this.canvas.addEventListener('mousemove', this.handleMouseMove);
+    this.canvas.addEventListener('pointerdown', this.handlePointerDown);
+    this.canvas.addEventListener('pointermove', this.handlePointerMove);
+    this.canvas.addEventListener('pointerup', this.handlePointerUp);
   }
 
   loadLevel(level: LevelData): void {
@@ -137,6 +159,7 @@ export class GameEngine {
     this.gameState.currentLevel = 1;
     this.gameState.showConsumables = false;
     this.gameState.hasConsumables = true;
+    this.gameState.allLilypadsFilled = false;
 
     // Initialize grid from level layout
     this.initializeGrid(level);
@@ -147,6 +170,12 @@ export class GameEngine {
 
     // Reset wave system
     this.waveSystem.reset();
+
+    // Reset token system
+    this.upgradeTokenSystem.reset();
+    this.draggingToken = null;
+    this.highlightedFrog = null;
+    this.foodCrumbs = [];
 
     // Wait for player to call the first wave
     if (level.waves.length > 0) {
@@ -177,6 +206,111 @@ export class GameEngine {
     } else {
       this.canvas.style.cursor = 'default';
     }
+  }
+
+  private getCanvasPos(event: PointerEvent): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
+    };
+  }
+
+  private getCanvasPosWithDragOffset(event: PointerEvent): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+
+    // Y offset: move above finger, stronger near bottom of screen
+    const screenHeight = window.innerHeight;
+    const normalizedY = Math.max(0, Math.min(1, 1 - event.clientY / screenHeight));
+    const BASE_OFFSET = -19;
+    const MAX_EXTRA_OFFSET = -181;
+    const offsetY = BASE_OFFSET + normalizedY * MAX_EXTRA_OFFSET;
+
+    // X offset: push away from hand side based on handedness
+    const normalizedX = this.handedness === 'right'
+      ? Math.max(0, (rect.right - event.clientX) / rect.width)
+      : Math.max(0, (event.clientX - rect.left) / rect.width);
+    const normalizedYx = Math.max(0, (screenHeight - event.clientY) / (screenHeight - rect.top));
+    const MAX_X_OFFSET = 200;
+    const offsetX = (this.handedness === 'right' ? -1 : 1) * MAX_X_OFFSET * normalizedX * normalizedYx;
+
+    return {
+      x: (event.clientX + offsetX - rect.left) * scaleX,
+      y: (event.clientY + offsetY - rect.top) * scaleY,
+    };
+  }
+
+  private handlePointerDown(event: PointerEvent): void {
+    if (this.gameState.isPaused || this.gameState.isGameOver || this.gameState.isVictory) return;
+
+    const { x, y } = this.getCanvasPos(event);
+    const token = this.upgradeTokenSystem.getTokenAtPosition(x, y);
+    if (token) {
+      this.draggingToken = token.id;
+      this.draggingTokenPos = { x, y };
+      this.upgradeTokenSystem.startDrag(token.id);
+      this.canvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    }
+  }
+
+  private handlePointerMove(event: PointerEvent): void {
+    if (!this.draggingToken) return;
+
+    const { x, y } = this.getCanvasPosWithDragOffset(event);
+    this.draggingTokenPos = { x, y };
+    this.upgradeTokenSystem.updateDragPosition(this.draggingToken, x, y);
+
+    // Find frog under cursor
+    const gridPos = this.pixelToGrid(x, y);
+    this.highlightedFrog = null;
+
+    if (gridPos) {
+      const cell = this.grid[gridPos.row]?.[gridPos.col];
+      if (cell?.frog) {
+        const token = this.upgradeTokenSystem.getTokens().get(this.draggingToken);
+        if (token) {
+          const compatible = this.upgradeSystem.canApplyToken(cell.frog, token.type);
+          this.highlightedFrog = { id: cell.frog.id, compatible };
+        }
+      }
+    }
+
+    event.preventDefault();
+  }
+
+  private handlePointerUp(event: PointerEvent): void {
+    if (!this.draggingToken) return;
+
+    const { x, y } = this.getCanvasPosWithDragOffset(event);
+    const tokenId = this.draggingToken;
+    const token = this.upgradeTokenSystem.getTokens().get(tokenId);
+    this.draggingToken = null;
+    this.highlightedFrog = null;
+    this.suppressClick = true;
+
+    if (!token) return;
+
+    // Check if dropped on a frog
+    const gridPos = this.pixelToGrid(x, y);
+    if (gridPos) {
+      const cell = this.grid[gridPos.row]?.[gridPos.col];
+      if (cell?.frog && this.upgradeSystem.canApplyToken(cell.frog, token.type)) {
+        this.upgradeSystem.applyTokenUpgrade(cell.frog, token.type);
+        this.upgradeTokenSystem.consumeToken(tokenId);
+        this.rippleSystem.add(cell.position.x, cell.position.y);
+        event.preventDefault();
+        return;
+      }
+    }
+
+    // Not a valid drop -- return token to landed position
+    this.upgradeTokenSystem.cancelDrag(tokenId);
+    event.preventDefault();
   }
 
   private initializeGrid(level: LevelData): void {
@@ -300,6 +434,10 @@ export class GameEngine {
     // Update floating texts
     this.floatingTextSystem.update(deltaTime * 1000);
 
+    // Remove expired food crumbs
+    const now = Date.now();
+    this.foodCrumbs = this.foodCrumbs.filter(c => now - c.createdAt <= c.duration);
+
     // Update ripples
     this.rippleSystem.update();
 
@@ -314,6 +452,9 @@ export class GameEngine {
 
     // Update heart float particles
     this.heartFloatSystem.update();
+
+    // Update upgrade tokens
+    this.upgradeTokenSystem.update(currentTime);
 
     // Check for foods that reached the end
     this.checkFoodsReachedEnd();
@@ -340,6 +481,28 @@ export class GameEngine {
       this.renderer.renderRipples(this.rippleSystem.getRipples());
       this.renderer.renderFloatingTexts(this.floatingTextSystem.getTexts());
       this.renderer.renderHeartFloats(this.heartFloatSystem.getHearts());
+      this.renderer.renderUpgradeTokens(this.upgradeTokenSystem.getTokens(), this.draggingToken);
+
+      // Highlight valid frogs when dragging a token
+      if (this.draggingToken) {
+        const token = this.upgradeTokenSystem.getTokens().get(this.draggingToken);
+        if (token) {
+          const validFrogs = Array.from(this.frogs.values()).filter(
+            f => this.upgradeSystem.canApplyToken(f, token.type)
+          );
+          this.renderer.renderValidTokenTargets(validFrogs, this.grid, this.highlightedFrog?.id ?? null);
+        }
+      }
+
+      // Highlight frog directly under cursor
+      if (this.highlightedFrog) {
+        const hFrog = this.frogs.get(this.highlightedFrog.id);
+        if (hFrog) {
+          this.renderer.renderTokenDragHighlight(hFrog, this.grid, this.highlightedFrog.compatible);
+        }
+      }
+
+      this.renderer.renderFoodCrumbs(this.foodCrumbs);
       this.renderer.renderFrogUpgradeUI(this.gameState.selectedFrog, this.frogs, this.grid, this.gameState.money, this.getMenuOpacity(this.frogSelectTime), this.upgradeSystem);
     }
 
@@ -362,12 +525,43 @@ export class GameEngine {
     }
   }
 
+  private static readonly FOOD_COLORS: Record<string, string[]> = {
+    APPLE: ['#E53935', '#B71C1C', '#43A047'],
+    BEANS: ['#8D6E63', '#5D4037', '#6D4C41'],
+    CAKE: ['#FFECB3', '#F8BBD0', '#D4E157'],
+    BURGER: ['#D4A056', '#5D4037', '#66BB6A'],
+    PIZZA: ['#FFA726', '#E53935', '#F9A825'],
+    DONUT: ['#F48FB1', '#CE93D8', '#FFCC80'],
+    CHERRY: ['#C62828', '#D32F2F', '#388E3C'],
+  };
+
   private removeDestroyedFoods(): void {
+    const currentTime = performance.now() / 1000;
+    const now = Date.now();
     for (const [id, food] of this.foods) {
       if (food.currentHealth <= 0) {
-        this.floatingTextSystem.add(food.position.x, food.position.y, food.stats.reward);
         this.gameState.money += food.stats.reward;
         this.gameState.score += food.stats.reward;
+        this.upgradeTokenSystem.onFoodKilled(food.stats.reward, currentTime, this.currentLevel!.streams);
+
+        // Spawn crumbs that burst outward and sink
+        const colors = GameEngine.FOOD_COLORS[food.type] || ['#888', '#666', '#AAA'];
+        const count = UPGRADE_TOKEN_CONFIG.CRUMB_COUNT;
+        for (let i = 0; i < count; i++) {
+          const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+          const speed = 30 + Math.random() * 50;
+          this.foodCrumbs.push({
+            x: food.position.x,
+            y: food.position.y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed * 0.6 - 20,
+            size: 2 + Math.random() * 3,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            createdAt: now,
+            duration: UPGRADE_TOKEN_CONFIG.CRUMB_DURATION,
+          });
+        }
+
         this.foods.delete(id);
       }
     }
@@ -387,6 +581,12 @@ export class GameEngine {
   }
 
   private handleCanvasClick(event: MouseEvent): void {
+    // Suppress click after a token drag completes
+    if (this.suppressClick) {
+      this.suppressClick = false;
+      return;
+    }
+
     const rect = this.canvas.getBoundingClientRect();
     const scaleX = this.canvas.width / rect.width;
     const scaleY = this.canvas.height / rect.height;
@@ -504,65 +704,21 @@ export class GameEngine {
       return;
     }
 
-    // Check for upgrade/sell button clicks if frog is selected
+    // Check for sell button click if frog is selected
     if (this.gameState.selectedFrog && !this.gameState.selectedFrogType) {
       const frog = this.frogs.get(this.gameState.selectedFrog);
       if (frog) {
         const cell = this.grid[frog.gridPosition.row][frog.gridPosition.col];
         const frogPos = cell.position;
         const btnSize = 60;
-        const level = frog.upgradeState.level;
-
-        const arcRadius = 105;
         const sellBtnX = frogPos.x - btnSize / 2;
         const sellBtnY = frogPos.y + 45;
 
-        // Check sell button (below frog, all levels)
         if (x >= sellBtnX && x <= sellBtnX + btnSize &&
           y >= sellBtnY && y <= sellBtnY + btnSize) {
           this.sellFrog(frog.id);
           this.deselectFrog();
           return;
-        }
-
-        if (level === 0) {
-          // Level 0: 1 centered button above -> L1
-          const cx = frogPos.x;
-          const cy = frogPos.y - arcRadius;
-          const bx = cx - btnSize / 2;
-          const by = cy - btnSize / 2;
-          if (x >= bx && x <= bx + btnSize &&
-            y >= by && y <= by + btnSize) {
-            this.purchaseUpgradeChoice(frog.id, 'L1');
-            return;
-          }
-        } else if (level === 1) {
-          // Level 1: 4 path buttons in arc above
-          const choices = [UpgradePath.SPOTS, UpgradePath.CIRCLES, UpgradePath.HORIZONTAL_STRIPES, UpgradePath.VERTICAL_STRIPES];
-          const angles = [-2.70, -1.95, -1.19, -0.44];
-
-          for (let i = 0; i < 4; i++) {
-            const cx = frogPos.x + arcRadius * Math.cos(angles[i]);
-            const cy = frogPos.y + arcRadius * Math.sin(angles[i]);
-            const bx = cx - btnSize / 2;
-            const by = cy - btnSize / 2;
-            if (x >= bx && x <= bx + btnSize &&
-              y >= by && y <= by + btnSize) {
-              this.purchaseUpgradeChoice(frog.id, choices[i]);
-              return;
-            }
-          }
-        } else if (level === 2) {
-          // Level 2: 1 centered button above -> L3
-          const cx = frogPos.x;
-          const cy = frogPos.y - arcRadius;
-          const bx = cx - btnSize / 2;
-          const by = cy - btnSize / 2;
-          if (x >= bx && x <= bx + btnSize &&
-            y >= by && y <= by + btnSize) {
-            this.purchaseUpgradeChoice(frog.id, 'L3');
-            return;
-          }
         }
       }
     }
@@ -656,15 +812,17 @@ export class GameEngine {
     }
 
     const frogData = this.frogSystem.createFrog(frogType, gridPos);
-    if (this.gameState.money < frogData.stats.cost) {
-      return false;
-    }
-
-    this.gameState.money -= frogData.stats.cost;
     cell.frog = frogData;
     this.frogs.set(frogData.id, frogData);
 
     this.rippleSystem.add(cell.position.x, cell.position.y);
+
+    // Auto-start the first wave when the first frog is placed
+    if (this.waveSystem.isWaitingForFirstWave()) {
+      this.callNextWave();
+    }
+
+    if (this.onFrogPlaced) this.onFrogPlaced(this.frogs.size);
 
     return true;
   }
@@ -709,15 +867,31 @@ export class GameEngine {
     if (bonus > 0) {
       this.gameState.money += bonus;
 
-      // Floating text to the left of the wave button
+      // Cookie crumbs burst from the button position
       const btnSize = 60;
       const gap = 15;
       const isLeft = this.handedness === 'left';
       const baseX = isLeft ? 5 : GAME_CONFIG.canvasWidth - btnSize - 5;
       const btnCx = baseX + btnSize / 2;
       const btnCy = 5 + (btnSize + gap) * 2 + btnSize / 2;
-      const textX = isLeft ? btnCx + btnSize + 10 : btnCx - btnSize - 10;
-      this.floatingTextSystem.add(textX, btnCy, bonus);
+
+      const colors = ['#D4A056', '#A0752E', '#5D3A1A'];
+      const count = 8;
+      const now = Date.now();
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+        const speed = 30 + Math.random() * 50;
+        this.foodCrumbs.push({
+          x: btnCx,
+          y: btnCy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed * 0.6 - 20,
+          size: 2 + Math.random() * 3,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          createdAt: now,
+          duration: UPGRADE_TOKEN_CONFIG.CRUMB_DURATION,
+        });
+      }
     }
   }
 
@@ -806,7 +980,10 @@ export class GameEngine {
   }
 
   getGameState(): GameState {
-    return { ...this.gameState };
+    const allFilled = this.grid.length > 0 && this.grid.every(row =>
+      row.every(cell => cell.type !== CellType.LILYPAD || cell.frog !== null)
+    );
+    return { ...this.gameState, allLilypadsFilled: allFilled };
   }
 
   getWaveSystem(): WaveSystem {
@@ -817,6 +994,9 @@ export class GameEngine {
     this.stop();
     this.canvas.removeEventListener('click', this.handleCanvasClick);
     this.canvas.removeEventListener('mousemove', this.handleMouseMove);
+    this.canvas.removeEventListener('pointerdown', this.handlePointerDown);
+    this.canvas.removeEventListener('pointermove', this.handlePointerMove);
+    this.canvas.removeEventListener('pointerup', this.handlePointerUp);
   }
 
   toggleSpeed(): void {

@@ -1,6 +1,6 @@
-import { GridCell, FrogData, FoodData, FoodType, FloatingText, GameState, StreamPath, CellType, GridPosition } from '../../types/game';
+import { GridCell, FrogData, FoodData, FoodType, FloatingText, GameState, StreamPath, CellType, GridPosition, UpgradeToken, FoodCrumb } from '../../types/game';
 import { UpgradePath } from '../../types/upgrades';
-import { COLORS, GAME_CONFIG, UPGRADE_PATH_COSTS, CONSUMABLE_CONFIG } from '@data/constants';
+import { COLORS, GAME_CONFIG, UPGRADE_PATH_COSTS, UPGRADE_TOKEN_CONFIG, CONSUMABLE_CONFIG } from '@data/constants';
 import { UpgradeSystem } from './UpgradeSystem';
 import { SynergyConnection } from './SynergyVisualSystem';
 import { WhirlpoolEffect, RainEffect } from './ConsumableSystem';
@@ -348,113 +348,11 @@ export class Renderer {
     }
 
     const buttonSize = 60;
-    const level = frog.upgradeState.level;
     const sellValue = Math.floor((frog.stats.cost + frog.totalSpent) / 2);
-    const arcRadius = 105;
     const sellBtnX = pos.x - buttonSize / 2;
     const sellBtnY = pos.y + 45;
 
-    if (level === 0) {
-      // Level 0: 1 centered button (L1 = spot)
-      const cost = UPGRADE_PATH_COSTS[0];
-      const canAfford = money >= cost;
-      const cx = pos.x;
-      const cy = pos.y - arcRadius;
-      const btnX = cx - buttonSize / 2;
-      const btnY = cy - buttonSize / 2;
-
-      this.ctx.fillStyle = canAfford ? '#4CAF50' : '#888';
-      this.roundRect(btnX, btnY, buttonSize, buttonSize, 8);
-      this.ctx.fill();
-      this.ctx.strokeStyle = canAfford ? '#45a049' : '#666';
-      this.ctx.lineWidth = 2;
-      this.roundRect(btnX, btnY, buttonSize, buttonSize, 8);
-      this.ctx.stroke();
-
-      this.ctx.save();
-      this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
-      this.drawUpgradeIcon('SPOT', cx, cy - 8, 12);
-      this.ctx.restore();
-
-      this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
-      this.ctx.font = 'bold 16px Arial';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.drawCoinText(`${cost}`, cx, cy + 18, 6);
-
-      this.renderSellButton(sellBtnX, sellBtnY, buttonSize, sellValue);
-    } else if (level === 1) {
-      // Level 1: 4 path buttons in arc (spots / circle / h-stripe / v-stripe)
-      const pathColors = ['#E67E22', '#3498DB', '#27AE60', '#9B59B6'];
-      const iconTypes: string[] = ['TWO_SPOTS', 'CIRCLE', 'H_STRIPE', 'V_STRIPE'];
-      const angles = [-2.70, -1.95, -1.19, -0.44];
-      const cost = UPGRADE_PATH_COSTS[1];
-      const canAfford = money >= cost;
-
-      // Price label above frog
-      this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
-      this.ctx.font = 'bold 16px Arial';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.drawCoinText(`${cost}`, pos.x, pos.y - arcRadius - 38, 6);
-
-      for (let i = 0; i < 4; i++) {
-        const cx = pos.x + arcRadius * Math.cos(angles[i]);
-        const cy = pos.y + arcRadius * Math.sin(angles[i]);
-        const btnX = cx - buttonSize / 2;
-        const btnY = cy - buttonSize / 2;
-
-        this.ctx.fillStyle = canAfford ? pathColors[i] : '#888';
-        this.roundRect(btnX, btnY, buttonSize, buttonSize, 8);
-        this.ctx.fill();
-        this.ctx.strokeStyle = canAfford ? this.darkenColor(pathColors[i], 0.2) : '#666';
-        this.ctx.lineWidth = 2;
-        this.roundRect(btnX, btnY, buttonSize, buttonSize, 8);
-        this.ctx.stroke();
-
-        this.ctx.save();
-        this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
-        this.drawUpgradeIcon(iconTypes[i], cx, cy, 12);
-        this.ctx.restore();
-      }
-
-      this.renderSellButton(sellBtnX, sellBtnY, buttonSize, sellValue);
-    } else if (level === 2) {
-      // Level 2: 1 centered button (continue to L3)
-      const cost = UPGRADE_PATH_COSTS[2];
-      const canAfford = money >= cost;
-      const cx = pos.x;
-      const cy = pos.y - arcRadius;
-      const btnX = cx - buttonSize / 2;
-      const btnY = cy - buttonSize / 2;
-
-      this.ctx.fillStyle = canAfford ? '#4CAF50' : '#888';
-      this.roundRect(btnX, btnY, buttonSize, buttonSize, 8);
-      this.ctx.fill();
-      this.ctx.strokeStyle = canAfford ? '#45a049' : '#666';
-      this.ctx.lineWidth = 2;
-      this.roundRect(btnX, btnY, buttonSize, buttonSize, 8);
-      this.ctx.stroke();
-
-      // Up arrow
-      this.ctx.fillStyle = canAfford ? 'white' : '#AAA';
-      this.ctx.beginPath();
-      this.ctx.moveTo(cx, btnY + 10);
-      this.ctx.lineTo(cx - 8, btnY + 20);
-      this.ctx.lineTo(cx + 8, btnY + 20);
-      this.ctx.closePath();
-      this.ctx.fill();
-
-      this.ctx.font = 'bold 16px Arial';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.drawCoinText(`${cost}`, cx, btnY + 42, 6);
-
-      this.renderSellButton(sellBtnX, sellBtnY, buttonSize, sellValue);
-    } else {
-      // Level 3: sell only
-      this.renderSellButton(sellBtnX, sellBtnY, buttonSize, sellValue);
-    }
+    this.renderSellButton(sellBtnX, sellBtnY, buttonSize, sellValue);
 
     this.ctx.restore();
   }
@@ -608,6 +506,41 @@ export class Renderer {
     this.ctx.closePath();
   }
 
+  private drawCookie(cx: number, cy: number, r: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+
+    // Cookie body
+    ctx.fillStyle = '#D4A056';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Darker edge ring
+    ctx.strokeStyle = '#A0752E';
+    ctx.lineWidth = Math.max(1, r * 0.12);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.88, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Chocolate chips (fixed positions relative to center)
+    const chips = [
+      { dx: -0.3, dy: -0.35 },
+      { dx: 0.35, dy: -0.2 },
+      { dx: -0.1, dy: 0.1 },
+      { dx: 0.2, dy: 0.35 },
+      { dx: -0.35, dy: 0.2 },
+    ];
+    ctx.fillStyle = '#5D3A1A';
+    for (const chip of chips) {
+      ctx.beginPath();
+      ctx.arc(cx + chip.dx * r, cy + chip.dy * r, r * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
   private renderFrog(frog: FrogData, grid: GridCell[][], money: number): void {
     const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
     const pos = cell.position;
@@ -666,24 +599,7 @@ export class Renderer {
     this.ctx.arc(pos.x + size / 4, pos.y - size / 4, size / 12, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Upgrade-available triangle indicator on lilypad perimeter
-    if (frog.upgradeState.level < 3 && money >= UPGRADE_PATH_COSTS[frog.upgradeState.level]) {
-      const padRadius = GAME_CONFIG.cellSize * 0.5 / 2;
-      const angle = Math.PI * 0.25; // bottom-right, 45 degrees
-      const tx = pos.x + Math.cos(angle) * padRadius;
-      const ty = pos.y + Math.sin(angle) * padRadius;
-      const triSize = 15.6;
-      this.ctx.fillStyle = '#22C55E';
-      this.ctx.strokeStyle = '#166534';
-      this.ctx.lineWidth = 1.5;
-      this.ctx.beginPath();
-      this.ctx.moveTo(tx, ty - triSize * 0.6);
-      this.ctx.lineTo(tx - triSize * 0.5, ty + triSize * 0.4);
-      this.ctx.lineTo(tx + triSize * 0.5, ty + triSize * 0.4);
-      this.ctx.closePath();
-      this.ctx.fill();
-      this.ctx.stroke();
-    }
+
 
   }
 
@@ -1061,8 +977,8 @@ export class Renderer {
     const timeRemaining = waveSystem.getTimeUntilNextWave(currentTime);
     const isLastWave = gameState.wave >= totalWaves;
 
-    // Wave timer button (circular)
-    if (waveSystem.isActive() && !gameState.isVictory && !isLastWave) {
+    // Wave timer button (cookie with clockwise radial wipe)
+    if (waveSystem.isActive() && !waveSystem.isWaitingForFirstWave() && !gameState.isVictory && !isLastWave) {
       const btnSize = 60;
       const gap = 15;
       const callButtonX = isLeft ? 5 : GAME_CONFIG.canvasWidth - btnSize - 5;
@@ -1071,57 +987,22 @@ export class Renderer {
       const cy = callButtonY + btnSize / 2;
       const radius = btnSize / 2 - 2;
 
-      const canCall = waveSystem.canCallNextWave(currentTime, foods);
       const progress = waveSystem.getWaveTimerProgress(currentTime);
-      const timeRemaining = waveSystem.getTimeUntilNextWave(currentTime);
-      const bonus = Math.floor(timeRemaining / 2);
+      const canCall = waveSystem.canCallNextWave(currentTime, foods);
 
-      // Background circle
-      this.ctx.fillStyle = '#555';
-      this.ctx.beginPath();
-      this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      this.ctx.fill();
-
-      // Progress arc (fills clockwise from top)
-      this.ctx.fillStyle = canCall ? 'rgba(255, 165, 0, 0.8)' : 'rgba(255, 165, 0, 0.35)';
-      this.ctx.beginPath();
-      this.ctx.moveTo(cx, cy);
-      this.ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
-      this.ctx.closePath();
-      this.ctx.fill();
-
-      // Ring border
-      this.ctx.strokeStyle = canCall ? '#FFA500' : '#777';
-      this.ctx.lineWidth = 3;
-      this.ctx.beginPath();
-      this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      this.ctx.stroke();
-
-      if (canCall) {
-        if (waveSystem.isWaitingForFirstWave()) {
-          // "START" label
-          this.ctx.font = 'bold 14px Arial';
-          this.ctx.textAlign = 'center';
-          this.ctx.textBaseline = 'middle';
-          this.ctx.fillStyle = 'white';
-          this.ctx.fillText('START', cx, cy);
-        } else {
-          // Black pill background behind coin + text
-          this.ctx.font = 'bold 16px Arial';
-          this.ctx.textAlign = 'center';
-          this.ctx.textBaseline = 'middle';
-          const coinR = 7;
-          const textW = this.ctx.measureText(`${bonus}`).width;
-          const pillW = coinR * 2 + 3 + textW + 10;
-          const pillH = 20;
-          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          this.roundRect(cx - pillW / 2, cy - pillH / 2, pillW, pillH, pillH / 2);
-          this.ctx.fill();
-
-          // Gold coin + amount
-          this.ctx.fillStyle = 'white';
-          this.drawCoinText(`${bonus}`, cx, cy, coinR);
-        }
+      // Cookie only appears once wave is 50%+ complete, then wipes from that point
+      if (canCall && progress < 0.99) {
+        // Remap progress from [0.5..1] to [0..1] for the radial wipe
+        const cookieProgress = (progress - 0.5) / 0.5;
+        const cutAngle = -Math.PI / 2 + cookieProgress * Math.PI * 2;
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.moveTo(cx, cy);
+        this.ctx.arc(cx, cy, radius, cutAngle, -Math.PI / 2, false);
+        this.ctx.closePath();
+        this.ctx.clip();
+        this.drawCookie(cx, cy, radius * 0.85);
+        this.ctx.restore();
       }
     }
 
@@ -1624,6 +1505,204 @@ export class Renderer {
       this.ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
       this.ctx.fillStyle = '#4ADE80';
       this.ctx.fill();
+    }
+  }
+
+  renderUpgradeTokens(tokens: Map<string, UpgradeToken>, draggingId: string | null): void {
+    const time = performance.now() / 1000;
+    const r = UPGRADE_TOKEN_CONFIG.TOKEN_SIZE;
+
+    for (const token of tokens.values()) {
+      if (token.beingDragged && token.id === draggingId) continue;
+
+      if (token.phase === 'bubbling') {
+        this.drawBubbles(token, time);
+      } else {
+        this.drawToken(token, time, r);
+      }
+    }
+
+    // Draw dragged token last (on top)
+    if (draggingId) {
+      const dragged = tokens.get(draggingId);
+      if (dragged) this.drawToken(dragged, time, r);
+    }
+  }
+
+  private drawBubbles(token: UpgradeToken, time: number): void {
+    const { x, y } = token.spawnPosition;
+    const elapsed = time - token.phaseStart;
+    const dur = UPGRADE_TOKEN_CONFIG.BUBBLE_DURATION;
+    const t = elapsed / dur; // 0..1 over full bubble phase
+
+    this.ctx.save();
+
+    // Repeating waves of bubbles that intensify over time
+    // Each bubble has a cycle period; we spawn several per second
+    const bubbleCount = 5;
+    const cycleTime = 0.8; // seconds per bubble lifecycle
+
+    for (let i = 0; i < bubbleCount; i++) {
+      const offset = (i / bubbleCount) * cycleTime;
+      const localTime = ((elapsed + offset) % cycleTime) / cycleTime; // 0..1 repeating
+
+      // Bubble rises and fades
+      const bx = x + (i - 2) * 6 + Math.sin(elapsed * 3 + i * 1.7) * 4;
+      const by = y - localTime * 35;
+      const baseR = 2 + (i % 3) * 1.2;
+      // Bubbles get bigger as we approach the pop
+      const sizeScale = 0.6 + t * 0.6;
+      const br = baseR * sizeScale;
+      const alpha = (1 - localTime) * (0.3 + t * 0.4);
+
+      this.ctx.globalAlpha = alpha;
+      this.ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      this.ctx.lineWidth = 1.2;
+      this.ctx.beginPath();
+      this.ctx.arc(bx, by, br, 0, Math.PI * 2);
+      this.ctx.stroke();
+
+      // Faint fill for larger bubbles near the end
+      if (t > 0.5 && br > 3) {
+        this.ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        this.ctx.fill();
+      }
+    }
+
+    // Surface disturbance ring that grows with time
+    const ringAlpha = 0.1 + t * 0.15;
+    const ringR = 10 + t * 12 + Math.sin(elapsed * 4) * 3;
+    this.ctx.globalAlpha = ringAlpha;
+    this.ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, ringR, 0, Math.PI * 2);
+    this.ctx.stroke();
+
+    this.ctx.restore();
+  }
+
+  private drawToken(token: UpgradeToken, time: number, r: number): void {
+    const { x, y } = token.position;
+
+    this.ctx.save();
+
+    // Pulsing glow for landed tokens
+    if (token.landed && !token.beingDragged) {
+      const pulse = 0.5 + 0.5 * Math.sin(time * UPGRADE_TOKEN_CONFIG.PULSE_SPEED * Math.PI * 2);
+      const glowR = r + 6 + pulse * 6;
+      const color = this.getTokenColor(token.type);
+      this.ctx.beginPath();
+      this.ctx.arc(x, y, glowR, 0, Math.PI * 2);
+      this.ctx.fillStyle = color.replace(')', `, ${0.15 + pulse * 0.15})`).replace('rgb(', 'rgba(');
+      this.ctx.fill();
+    }
+
+    // Token body circle
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, r, 0, Math.PI * 2);
+    this.ctx.fillStyle = this.getTokenHexColor(token.type);
+    this.ctx.fill();
+    this.ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    this.ctx.lineWidth = 2;
+    this.ctx.stroke();
+
+    // Icon inside
+    this.ctx.fillStyle = 'white';
+    this.ctx.strokeStyle = 'white';
+    const iconMap: Record<string, string> = {
+      [UpgradePath.SPOTS]: 'TWO_SPOTS',
+      [UpgradePath.CIRCLES]: 'CIRCLE',
+      [UpgradePath.HORIZONTAL_STRIPES]: 'H_STRIPE',
+      [UpgradePath.VERTICAL_STRIPES]: 'V_STRIPE',
+    };
+    this.drawUpgradeIcon(iconMap[token.type] || 'SPOT', x, y, r * 0.6);
+
+    this.ctx.restore();
+  }
+
+  private getTokenHexColor(type: UpgradePath): string {
+    switch (type) {
+      case UpgradePath.SPOTS: return '#E67E22';
+      case UpgradePath.CIRCLES: return '#3498DB';
+      case UpgradePath.HORIZONTAL_STRIPES: return '#27AE60';
+      case UpgradePath.VERTICAL_STRIPES: return '#9B59B6';
+      default: return '#888';
+    }
+  }
+
+  private getTokenColor(type: UpgradePath): string {
+    switch (type) {
+      case UpgradePath.SPOTS: return 'rgb(230, 126, 34)';
+      case UpgradePath.CIRCLES: return 'rgb(52, 152, 219)';
+      case UpgradePath.HORIZONTAL_STRIPES: return 'rgb(39, 174, 96)';
+      case UpgradePath.VERTICAL_STRIPES: return 'rgb(155, 89, 182)';
+      default: return 'rgb(136, 136, 136)';
+    }
+  }
+
+  renderValidTokenTargets(frogs: FrogData[], grid: GridCell[][], hoveredFrogId: string | null): void {
+    for (const frog of frogs) {
+      if (frog.id === hoveredFrogId) continue;
+      const cell = grid[frog.gridPosition.row]?.[frog.gridPosition.col];
+      if (!cell) continue;
+      const pos = cell.position;
+      const r = GAME_CONFIG.cellSize * 0.5 * 0.9 / 2 + 8;
+
+      this.ctx.save();
+      this.ctx.beginPath();
+      this.ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      this.ctx.shadowColor = '#ffffff';
+      this.ctx.shadowBlur = 8;
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
+  }
+
+  renderTokenDragHighlight(frog: FrogData, grid: GridCell[][], compatible: boolean): void {
+    const cell = grid[frog.gridPosition.row][frog.gridPosition.col];
+    const pos = cell.position;
+    const r = GAME_CONFIG.cellSize * 0.5 * 0.9 / 2 + 8;
+
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+    if (compatible) {
+      this.ctx.strokeStyle = '#22C55E';
+      this.ctx.shadowColor = '#22C55E';
+    } else {
+      this.ctx.strokeStyle = '#EF4444';
+      this.ctx.shadowColor = '#EF4444';
+    }
+    this.ctx.shadowBlur = 12;
+    this.ctx.lineWidth = 3;
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  renderFoodCrumbs(crumbs: FoodCrumb[]): void {
+    const now = Date.now();
+
+    for (const c of crumbs) {
+      const age = now - c.createdAt;
+      if (age < 0 || age > c.duration) continue;
+
+      const t = age / c.duration;
+      // Burst outward then sink down
+      const px = c.x + c.vx * t;
+      const py = c.y + c.vy * t + 40 * t * t; // gravity pulls crumbs down
+      const alpha = 1 - t;
+      const size = c.size * (1 - t * 0.5);
+
+      this.ctx.save();
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = c.color;
+      this.ctx.beginPath();
+      this.ctx.arc(px, py, size, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
     }
   }
 

@@ -124,6 +124,31 @@ export class UpgradeSystem {
     return count;
   }
 
+  canApplyToken(frog: FrogData, tokenType: UpgradePath): boolean {
+    const level = frog.upgradeState.level;
+    if (level >= 3) return false;
+
+    if (level === 0) return true; // Any token works for L0->L1
+
+    if (level === 1) return true; // Any token works for L1->L2 (sets the path)
+
+    // level === 2: only the matching path token works
+    return frog.upgradeState.path === tokenType;
+  }
+
+  applyTokenUpgrade(frog: FrogData, tokenType: UpgradePath): void {
+    const state = frog.upgradeState;
+
+    if (state.level === 0) {
+      state.level = 1;
+    } else if (state.level === 1) {
+      state.level = 2;
+      state.path = tokenType;
+    } else if (state.level === 2) {
+      state.level = 3;
+    }
+  }
+
   getAvailableUpgrades(frog: FrogData): string[] {
     const state = frog.upgradeState;
 

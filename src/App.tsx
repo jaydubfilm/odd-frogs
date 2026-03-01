@@ -11,7 +11,7 @@ import { SettingsModal } from './components/ui/SettingsModal';
 import { GameState, FrogType, LevelProgress, RiverDefinition, ConsumableType, ConsumableInventory } from './types/game';
 import { ConsumableSelector, ConsumableIcon } from './components/ui/ConsumableSelector';
 import { ProceduralLevelGenerator } from './game/utils/ProceduralLevelGenerator';
-import { FROG_UNLOCK_LEVEL, CONSUMABLE_CONFIG } from './data/constants';
+import { FROG_UNLOCK_LEVEL, CONSUMABLE_CONFIG, FROG_COOLDOWN_MS } from './data/constants';
 import { RIVERS } from './data/rivers';
 import './styles/index.css';
 
@@ -70,6 +70,9 @@ function App() {
   } | null>(null);
   const [activeConsumable, setActiveConsumable] = useState<ConsumableType | null>(null);
 
+  // Frog placement cooldown
+  const [frogCooldownEnd, setFrogCooldownEnd] = useState(0);
+
   // River progress (20 levels per river)
   const [riverProgress, setRiverProgress] = useState<Record<string, LevelProgress[]>>(createRiverProgress);
 
@@ -121,6 +124,7 @@ function App() {
     gameSpeed: 1,
     showConsumables: false,
     hasConsumables: CONSUMABLE_CONFIG.STARTING_COUNT > 0,
+    allLilypadsFilled: false,
   });
 
   const [waveInfo, setWaveInfo] = useState({
@@ -174,6 +178,7 @@ function App() {
       gameSpeed: 1,
       showConsumables: false,
       hasConsumables: CONSUMABLE_CONFIG.STARTING_COUNT > 0,
+      allLilypadsFilled: false,
     });
 
     // Reset consumables for new level
@@ -184,6 +189,7 @@ function App() {
       [ConsumableType.WHIRLPOOL]: { count: CONSUMABLE_CONFIG.STARTING_COUNT, cooldownUntil: 0 },
     });
     setActiveConsumable(null);
+    setFrogCooldownEnd(0);
   };
 
   const handleBackFromSelection = () => {
@@ -358,10 +364,26 @@ function App() {
     return () => clearInterval(interval);
   }, [showConsumables]);
 
+  // Frog cooldown tick for re-rendering countdown
+  const [, setCooldownTick] = useState(0);
+  useEffect(() => {
+    if (frogCooldownEnd <= Date.now()) return;
+    const interval = setInterval(() => {
+      if (Date.now() >= frogCooldownEnd) clearInterval(interval);
+      setCooldownTick(t => t + 1);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [frogCooldownEnd]);
+
   const hasAnyConsumables = Object.values(consumables).some(inv => inv.count > 0);
   const isConsumableReady = Object.values(consumables).some(
     inv => inv.count > 0 && (inv.cooldownUntil <= 0 || Date.now() >= inv.cooldownUntil)
   );
+
+  const handleFrogPlaced = useCallback((frogCount: number) => {
+    const cooldown = FROG_COOLDOWN_MS + (frogCount - 1) * 2000;
+    setFrogCooldownEnd(Date.now() + cooldown);
+  }, []);
 
   const handleConsumablePlaced = useCallback((type: string) => {
     const cType = type as ConsumableType;
@@ -490,12 +512,13 @@ function App() {
                 consumableReady={isConsumableReady}
                 activeConsumable={activeConsumable}
                 onConsumablePlaced={handleConsumablePlaced}
+                onFrogPlaced={handleFrogPlaced}
               />
             </div>
 
             {/* Mobile: Frog/Consumable selector at bottom */}
             <div className="lg:hidden flex-shrink-0 pb-1">
-              {showConsumables && hasAnyConsumables ? (
+              {(showConsumables || gameState.allLilypadsFilled) && hasAnyConsumables ? (
                 <ConsumableSelector
                   consumableState={consumables}
                   onUseConsumable={handleUseConsumable}
@@ -510,7 +533,7 @@ function App() {
                   onSelectFrog={handleSelectFrog}
                   onDragStart={handleDragStart}
                   draggingFrogType={dragging?.frogType ?? null}
-                  playerMoney={gameState.money}
+                  cooldownEnd={frogCooldownEnd}
                   handedness={handedness}
                   availableFrogTypes={selectedFrogTypes.length > 0 ? selectedFrogTypes : undefined}
                 />
@@ -520,7 +543,7 @@ function App() {
             {/* Desktop: Side panels */}
             <div className="hidden lg:flex flex-row gap-6 justify-center">
               <div className="w-80">
-                {showConsumables && hasAnyConsumables ? (
+                {(showConsumables || gameState.allLilypadsFilled) && hasAnyConsumables ? (
                   <ConsumableSelector
                     consumableState={consumables}
                     onUseConsumable={handleUseConsumable}
@@ -535,7 +558,7 @@ function App() {
                     onSelectFrog={handleSelectFrog}
                     onDragStart={handleDragStart}
                     draggingFrogType={dragging?.frogType ?? null}
-                    playerMoney={gameState.money}
+                    cooldownEnd={frogCooldownEnd}
                     handedness={handedness}
                     availableFrogTypes={selectedFrogTypes.length > 0 ? selectedFrogTypes : undefined}
                   />

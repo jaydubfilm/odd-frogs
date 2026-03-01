@@ -11,7 +11,8 @@
       "Bash(npm install:*)",
       "Bash(npx tsx:*)",
       "Bash(node -e:*)",
-      "Bash(start \"\" \"C:\\\\Users\\\\Jonathen\\\\projects\\\\oddfrogsai\\\\tools\\\\level-designer.html\")"
+      "Bash(start \"\" \"C:\\\\Users\\\\Jonathen\\\\projects\\\\oddfrogsai\\\\tools\\\\level-designer.html\")",
+      "Bash(xargs grep:*)"
     ]
   }
 }

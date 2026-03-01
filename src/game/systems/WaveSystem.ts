@@ -96,20 +96,10 @@ export class WaveSystem {
   }
 
   canCallNextWave(currentTime: number, foods: Map<string, FoodData>): boolean {
-    if (this.waitingForFirstWave) return true;
+    if (this.waitingForFirstWave) return false;
     if (!this.currentWave || !this.isWaveActive) return false;
-
     const elapsed = currentTime - this.waveStartTime;
-    const threshold = this.currentWave.duration * 0.25; // 25% of wave duration
-
-    // Can call next wave if:
-    // 1. All enemies spawned AND all enemies dead (immediate)
-    // OR
-    // 2. 25% of wave time has elapsed
-    const allEnemiesDead = this.spawnQueue.length === 0 && foods.size === 0;
-    const timeThresholdMet = elapsed >= threshold;
-
-    return allEnemiesDead || timeThresholdMet;
+    return elapsed >= this.currentWave.duration * 0.5;
   }
 
   callNextWaveEarly(currentTime: number, foods: Map<string, FoodData>): number {

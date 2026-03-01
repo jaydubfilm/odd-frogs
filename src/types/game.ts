@@ -2,7 +2,7 @@
 // Core game types and interfaces
 
 import { SmoothPath } from '../game/utils/PathGenerator';
-import { FrogUpgradeState } from './upgrades'; 
+import { FrogUpgradeState, UpgradePath } from './upgrades';
 
 export interface Position {
   x: number;
@@ -159,6 +159,7 @@ export interface GameState {
   gameSpeed: number;
   showConsumables: boolean;
   hasConsumables: boolean;
+  allLilypadsFilled: boolean;
 }
 
 export interface LevelData {
@@ -230,4 +231,31 @@ export enum ConsumableType {
 export interface ConsumableInventory {
   count: number;
   cooldownUntil: number; // timestamp, 0 = ready
+}
+
+export interface FoodCrumb {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  color: string;
+  createdAt: number;
+  duration: number;
+}
+
+export type TokenPhase = 'bubbling' | 'physics' | 'landed';
+
+export interface UpgradeToken {
+  id: string;
+  type: UpgradePath;
+  position: Position;
+  spawnPosition: Position;
+  phase: TokenPhase;
+  phaseStart: number;
+  landed: boolean;
+  beingDragged: boolean;
+  landedPosition: Position;
+  vx: number;
+  vy: number;
 }

@@ -1,15 +1,14 @@
 import { useRef, useCallback } from 'react';
 import { FrogType } from '../../types/game';
-import { FROG_STATS } from '@data/constants';
+import { FROG_COOLDOWN_MS } from '@data/constants';
 import { FrogPreview } from './FrogPreview';
-import { CoinIcon } from './CoinIcon';
 
 interface FrogSelectorProps {
   selectedFrog: FrogType | null;
   onSelectFrog: (frogType: FrogType) => void;
   onDragStart?: (frogType: FrogType, startX: number, startY: number) => void;
   draggingFrogType?: FrogType | null;
-  playerMoney: number;
+  cooldownEnd: number;
   handedness?: 'left' | 'right';
   availableFrogTypes?: FrogType[];
 }
@@ -19,7 +18,7 @@ export const FrogSelector = ({
   onSelectFrog,
   onDragStart,
   draggingFrogType,
-  playerMoney,
+  cooldownEnd,
   handedness = 'right',
   availableFrogTypes,
 }: FrogSelectorProps) => {
@@ -27,11 +26,16 @@ export const FrogSelector = ({
   const frogTypes = availableFrogTypes ? allFrogTypes.filter(ft => availableFrogTypes.includes(ft)) : allFrogTypes;
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
 
+  const now = Date.now();
+  const onCooldown = now < cooldownEnd;
+  const cooldownFraction = onCooldown
+    ? (cooldownEnd - now) / FROG_COOLDOWN_MS
+    : 0;
+
   const handlePointerDown = useCallback((e: React.PointerEvent, frogType: FrogType) => {
-    const stats = FROG_STATS[frogType];
-    if (playerMoney < stats.cost) return;
+    if (Date.now() < cooldownEnd) return;
     dragStartPos.current = { x: e.clientX, y: e.clientY };
-  }, [playerMoney]);
+  }, [cooldownEnd]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent, frogType: FrogType) => {
     if (!dragStartPos.current || !onDragStart) return;
@@ -59,8 +63,6 @@ export const FrogSelector = ({
     <div className="bg-white/90 rounded-lg p-2 shadow-lg">
       <div className="flex gap-2 justify-center">
         {frogTypes.map(frogType => {
-            const stats = FROG_STATS[frogType];
-            const canAfford = playerMoney >= stats.cost;
             const isSelected = selectedFrog === frogType;
             const isDragging = draggingFrogType === frogType;
 
@@ -70,11 +72,11 @@ export const FrogSelector = ({
                 onPointerDown={(e) => handlePointerDown(e, frogType)}
                 onPointerMove={(e) => handlePointerMove(e, frogType)}
                 onPointerUp={(e) => handlePointerUp(e, frogType)}
-                disabled={!canAfford}
+                disabled={onCooldown}
                 className={`
-                flex flex-col items-center gap-1 p-2 rounded-lg touch-none
+                relative flex flex-col items-center gap-1 p-2 rounded-lg touch-none overflow-hidden
                 ${isSelected ? 'ring-2 ring-yellow-400 bg-yellow-50' : 'bg-white'}
-                ${canAfford ? 'hover:bg-gray-100 cursor-pointer' : 'opacity-50 cursor-not-allowed'}
+                ${!onCooldown ? 'hover:bg-gray-100 cursor-pointer' : 'cursor-not-allowed'}
                 border-2 border-gray-300
               `}
               >
@@ -85,7 +87,12 @@ export const FrogSelector = ({
                     <FrogPreview frogType={frogType} size={48} />
                   )}
                 </div>
-                <div className="font-bold text-sm text-green-600 flex items-center gap-0.5 justify-center"><CoinIcon size={14} />{stats.cost}</div>
+                {onCooldown && (
+                  <div
+                    className="absolute inset-x-0 top-0 bg-black/50 pointer-events-none"
+                    style={{ height: `${cooldownFraction * 100}%` }}
+                  />
+                )}
               </button>
             );
           })}

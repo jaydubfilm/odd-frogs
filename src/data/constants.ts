@@ -91,7 +91,23 @@ export const COLORS = {
   HEALTH_BAR_DAMAGED: '#FF0000',
 };
 
+export const FROG_COOLDOWN_MS = 8000;
+
 export const UPGRADE_PATH_COSTS = [15, 35, 75]; // L1, L2, L3
+
+export const UPGRADE_TOKEN_CONFIG = {
+  REWARD_PER_TOKEN: 4,      // accumulated food reward value to spawn a token
+  BUBBLE_DURATION: 3.0,     // seconds of precursor bubbles at water spot
+  POP_DURATION: 0.3,        // seconds to pop up above water
+  POP_HEIGHT: 80,           // pixels above water spot the token rises
+  GRAVITY: 500,             // pixels/sec^2 for the fall
+  PULSE_SPEED: 2,           // pulse cycles per second
+  HIT_RADIUS: 28,           // tap/click detection radius
+  TOKEN_SIZE: 24,           // visual radius
+  MAX_TOKENS: 3,            // cap on map
+  CRUMB_COUNT: 6,           // crumbs per food death
+  CRUMB_DURATION: 800,      // ms for crumbs to sink and fade
+};
 
 export const CONSUMABLE_CONFIG = {
   STARTING_COUNT: 2,
